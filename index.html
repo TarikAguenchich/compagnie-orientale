@@ -16,6 +16,7 @@
   <nav class="tabs">
     <button type="button" id="tabPerm" class="on">Permanence en cours</button>
     <button type="button" id="tabHist">Historique</button>
+    <button type="button" id="tabCat">Catalogue</button>
   </nav>
 
   <div id="viewPerm">
@@ -92,6 +93,55 @@
     </div>
     <div id="hist"></div>
     <p class="hint">L'historique est conservé dans ce navigateur (appareil de l'intendant).</p>
+  </div>
+
+  <!-- Catalogue -->
+  <div id="viewCat" hidden>
+    <div class="card" id="catFormCard">
+      <h2 id="catFormTitle">Ajouter un article</h2>
+      <div class="grid">
+        <div><label for="cCat">Catégorie</label><input id="cCat" list="catList" autocomplete="off" placeholder="ex. Alcool"><datalist id="catList"></datalist></div>
+        <div><label for="cNom">Nom de l'article</label><input id="cNom" autocomplete="off"></div>
+        <div><label for="cPrix">Prix (septims)</label><input id="cPrix" type="number" min="0" step="1"></div>
+      </div>
+      <div class="grid" style="margin-top:12px">
+        <div><label for="cId">ID de l'article <span class="hint"></span></label><input id="cId" class="mono" autocomplete="off" placeholder="ex. 0001396B"></div>
+        <div><label for="cFourni">À fournir par le client <span class="hint">(facultatif)</span></label><input id="cFourni" placeholder="ex. Casque d'acier"></div>
+        <div><label for="cNote">Avertissement <span class="hint">(facultatif)</span></label><input id="cNote" placeholder="ex. Max 4 par semaine"></div>
+      </div>
+      <div style="margin-top:12px">
+        <label for="cVar">Variantes <span class="hint">(facultatif, séparées par des virgules — chaque variante peut avoir son ID : <code>Blanc = 0A1B2C, Bleu = 0A1B2D</code>)</span></label>
+        <input id="cVar" placeholder="ex. Blanc = 0A1B2C, Bleu = 0A1B2D, Violet">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button type="button" class="btn primary" id="cSave">Ajouter au catalogue</button>
+        <button type="button" class="btn" id="cCancel" style="display:none">Annuler la modification</button>
+      </div>
+      <div class="msg" id="cMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Articles <span class="badge" id="nbArticles">0</span></h2>
+      <input id="cSearch" placeholder="Rechercher un article, une catégorie ou un ID…" style="margin-bottom:10px">
+      <div class="row" style="margin-bottom:10px">
+        <label class="liv"><input type="checkbox" id="cMissing"> Seulement les articles sans ID</label>
+        <span class="hint" id="nbMissing"></span>
+      </div>
+      <p class="hint" style="margin-top:0">Les ID se modifient directement dans la colonne « ID item ».</p>
+      <div id="catTable"></div>
+    </div>
+
+    <div class="card">
+      <h2>Sauvegarde du catalogue</h2>
+      <p class="hint" style="margin-top:0">Les modifications sont enregistrées dans ce navigateur. Pour que tous les intendants aient le même catalogue, utilise « Copier pour script.js » et remplace le bloc <code>CATALOGUE_DEFAUT</code> dans <code>script.js</code>.</p>
+      <div class="row">
+        <button type="button" class="btn" id="cExport">Exporter (.json)</button>
+        <label class="btn" style="margin:0">Importer (.json)<input type="file" id="cImport" accept=".json,application/json" hidden></label>
+        <button type="button" class="btn" id="cCopyJs">Copier pour script.js</button>
+        <button type="button" class="btn" id="cReset" style="margin-left:auto">Revenir au catalogue d'origine</button>
+      </div>
+      <div class="msg" id="cSaveMsg"></div>
+    </div>
   </div>
 </div>
 

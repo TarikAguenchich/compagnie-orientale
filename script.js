@@ -1,8 +1,8 @@
 /* =========================================================
    CONFIG
    ========================================================= */
-const WEBHOOK_URL   = "https://discord.com/api/webhooks/XXXXXXXX/YYYYYYYY";
-const ROLE_ID_MODOS = "123456789012345678";   // "" = pas de ping
+const WEBHOOK_URL   = "https://discord.com/api/webhooks/1552560280481833070/fM56DVf7LqtqifvuFinmTgpbhDatkxSHwXYWomq1cQKTjneYrGrmPdvSm3YQH8CHhb3b";
+const ROLE_ID_MODOS = "1552559545828642868";   // "" = pas de ping
 const MONNAIE       = "septims";
 
 const INTENDANTS = [
@@ -21,7 +21,8 @@ const MOON_MONK = [
 // prix = septims ; fourni = ce que le client doit apporter en plus ("" si rien)
 // variantes = liste facultative (coloris...) : une 2e liste apparaît dans la ligne
 // note = avertissement facultatif affiché à côté du coût
-const CATALOGUE = [
+// id = ID de l'article pour le give ; varIds = { "Variante": "ID" } pour les articles à variantes
+const CATALOGUE_DEFAUT = [
   // Plates nordiques
   { cat: "Plates nordiques", nom: "Casque nordique de plates",    fourni: "Casque d'acier",    prix: 3000 },
   { cat: "Plates nordiques", nom: "Armure nordique de plates",    fourni: "Armure d'acier",    prix: 6000 },
@@ -155,7 +156,7 @@ const CATALOGUE = [
   { cat: "Vêtements — Bijoux", nom: "Amulette d'aigle osseux",        fourni: "", prix: 4000 },
   // ===== ALCOOL =====
   { cat: "Alcool", nom: "Course-Falaise",           fourni: "Bière", prix: 40 },
-  { cat: "Alcool", nom: "Vin des frères Surilies",   fourni: "Vin",   prix: 35 },
+  { cat: "Alcool", nom: "Vin des frères Surilies",  fourni: "Vin",   prix: 35 },
   { cat: "Alcool", nom: "Matze",                    fourni: "Vin",   prix: 50 },
   { cat: "Alcool", nom: "Tour d'Or Blanc",          fourni: "Vin",   prix: 55 },
   { cat: "Alcool", nom: "Vin épicé",                fourni: "Vin",   prix: 110 },
@@ -164,7 +165,7 @@ const CATALOGUE = [
   { cat: "Alcool", nom: "Vin de Tisebraise",        fourni: "Vin",   prix: 50 },
   { cat: "Alcool", nom: "Shein",                    fourni: "Vin",   prix: 50 },
   { cat: "Alcool", nom: "Vin alto",                 fourni: "Vin",   prix: 45 },
-  { cat: "Alcool", nom: "Rhum de Stross M'kai",      fourni: "",      prix: 50 },
+  { cat: "Alcool", nom: "Rhum de Stross M'kai",     fourni: "",      prix: 50 },
   { cat: "Alcool", nom: "Vin de Sang Argonien",     fourni: "Vin",   prix: 50 },
   { cat: "Alcool", nom: "Colodvie",                 fourni: "Vin",   prix: 70 },
   { cat: "Alcool", nom: "Flin",                     fourni: "Vin",   prix: 50 },
@@ -177,19 +178,19 @@ const CATALOGUE = [
   { cat: "Potions", nom: "Élixir de respiration aquatique",   fourni: "", prix: 500 },
   { cat: "Potions", nom: "Potion d'invisibilité prolongée",   fourni: "", prix: 1500 },
   // ===== NOURRITURE =====
-  { cat: "Nourriture", nom: "Boeuf épicé",               fourni: "", prix: 12 },
+  { cat: "Nourriture", nom: "Boeuf épicé",              fourni: "", prix: 12 },
   { cat: "Nourriture", nom: "Igname des Cendres",       fourni: "", prix: 10 },
   { cat: "Nourriture", nom: "Viande cuite de sanglier", fourni: "", prix: 10 },
   { cat: "Nourriture", nom: "Madeleine",                fourni: "", prix: 5 },
   // ===== JOAILLERIE =====
-  { cat: "Joaillerie", nom: "Saphir (parfait)",     fourni: "Saphir",   prix: 450 },
-  { cat: "Joaillerie", nom: "Saphir (exquis)",      fourni: "Saphir",   prix: 800 },
-  { cat: "Joaillerie", nom: "Grenat (parfait)",     fourni: "Grenat",   prix: 500 },
-  { cat: "Joaillerie", nom: "Rubis (parfait)",      fourni: "Rubis",    prix: 850 },
-  { cat: "Joaillerie", nom: "Émeraude (parfaite)",  fourni: "Émeraude", prix: 1250 },
-  { cat: "Joaillerie", nom: "Améthyste (parfaite)", fourni: "Améthyste",prix: 850 },
-  { cat: "Joaillerie", nom: "Diamant",              fourni: "",         prix: 1200 },
-  { cat: "Joaillerie", nom: "Diamant (parfait)",    fourni: "Diamant",  prix: 2800 },
+  { cat: "Joaillerie", nom: "Saphir (parfait)",     fourni: "Saphir",    prix: 450 },
+  { cat: "Joaillerie", nom: "Saphir (exquis)",      fourni: "Saphir",    prix: 800 },
+  { cat: "Joaillerie", nom: "Grenat (parfait)",     fourni: "Grenat",    prix: 500 },
+  { cat: "Joaillerie", nom: "Rubis (parfait)",      fourni: "Rubis",     prix: 850 },
+  { cat: "Joaillerie", nom: "Émeraude (parfaite)",  fourni: "Émeraude",  prix: 1250 },
+  { cat: "Joaillerie", nom: "Améthyste (parfaite)", fourni: "Améthyste", prix: 850 },
+  { cat: "Joaillerie", nom: "Diamant",              fourni: "",          prix: 1200 },
+  { cat: "Joaillerie", nom: "Diamant (parfait)",    fourni: "Diamant",   prix: 2800 },
   // ===== INGRÉDIENTS ALCHIMIQUES =====
   { cat: "Ingrédients alchimiques", nom: "Sucrelune x50",       fourni: "", prix: 1000 },
   { cat: "Ingrédients alchimiques", nom: "Sel de feu x30",      fourni: "", prix: 1000 },
@@ -199,21 +200,21 @@ const CATALOGUE = [
   { cat: "Ingrédients alchimiques", nom: "Rayon de miel x50",   fourni: "", prix: 600 },
   { cat: "Ingrédients alchimiques", nom: "Choucard x30",        fourni: "", prix: 300 },
   // ===== MINERAIS =====
-  { cat: "Minerais", nom: "Malachite brute",          fourni: "", prix: 750 },
-  { cat: "Minerais", nom: "Vif-argent brute",          fourni: "", prix: 550 },
-  { cat: "Minerais", nom: "Lingot de métal dwemer",   fourni: "", prix: 600 },
-  { cat: "Minerais", nom: "Ébonite brute",            fourni: "", prix: 20000, note: "Max 4 par semaine / licence" },
-  { cat: "Minerais", nom: "Pierre de lune brute",     fourni: "", prix: 350 },
+  { cat: "Minerais", nom: "Malachite brute",        fourni: "", prix: 750 },
+  { cat: "Minerais", nom: "Vif-argent brute",       fourni: "", prix: 550 },
+  { cat: "Minerais", nom: "Lingot de métal dwemer", fourni: "", prix: 600 },
+  { cat: "Minerais", nom: "Ébonite brute",          fourni: "", prix: 20000, note: "Max 4 par semaine / licence" },
+  { cat: "Minerais", nom: "Pierre de lune brute",   fourni: "", prix: 350 },
   // ===== AUTRES =====
-  { cat: "Autres", nom: "Masque de bois",           fourni: "",                          prix: 50000 },
-  { cat: "Autres", nom: "Épée en bois",             fourni: "10 Clous",                  prix: 50 },
-  { cat: "Autres", nom: "Arbalète",                 fourni: "",                          prix: 2000 },
-  { cat: "Autres", nom: "Capuchon d'exécution",     fourni: "",                          prix: 250 },
-  { cat: "Autres", nom: "Livres divers",            fourni: "",                          prix: 500 },
-  { cat: "Autres", nom: "Amulette nordique antique",fourni: "",                          prix: 4000 },
-  { cat: "Autres", nom: "Carreaux d'acier x80",     fourni: "",                          prix: 400 },
-  { cat: "Autres", nom: "Casque de berserk",        fourni: "Casque en fourrure + Peau d'ours", prix: 500 },
-  { cat: "Autres", nom: "Torche x10",               fourni: "20 Petit bois",             prix: 100 },
+  { cat: "Autres", nom: "Masque de bois",            fourni: "",                                 prix: 50000 },
+  { cat: "Autres", nom: "Épée en bois",              fourni: "10 Clous",                         prix: 50 },
+  { cat: "Autres", nom: "Arbalète",                  fourni: "",                                 prix: 2000 },
+  { cat: "Autres", nom: "Capuchon d'exécution",      fourni: "",                                 prix: 250 },
+  { cat: "Autres", nom: "Livres divers",             fourni: "",                                 prix: 500 },
+  { cat: "Autres", nom: "Amulette nordique antique", fourni: "",                                 prix: 4000 },
+  { cat: "Autres", nom: "Carreaux d'acier x80",      fourni: "",                                 prix: 400 },
+  { cat: "Autres", nom: "Casque de berserk",         fourni: "Casque en fourrure + Peau d'ours", prix: 500 },
+  { cat: "Autres", nom: "Torche x10",                fourni: "20 Petit bois",                    prix: 100 },
 ];
 
 /* =========================================================
@@ -223,8 +224,17 @@ const CATALOGUE = [
    ========================================================= */
 const $ = id => document.getElementById(id);
 const fmt = n => n.toLocaleString("fr-FR") + " " + MONNAIE;
-const ITEM = Object.fromEntries(CATALOGUE.map(a => [a.nom, a]));
+// Catalogue actif : version modifiée dans ce navigateur, sinon celui par défaut
+let CATALOGUE = CATALOGUE_DEFAUT;
+try { const c = JSON.parse(localStorage.getItem("catalogue")); if (Array.isArray(c) && c.length) CATALOGUE = c; } catch {}
+let ITEM = {};
+const rebuildItems = () => { ITEM = Object.fromEntries(CATALOGUE.map(a => [a.nom, a])); };
+rebuildItems();
+// Infos d'un article de commande : figées à l'enregistrement, sinon celles du catalogue
+const infos = x => ({ prix: x.prix ?? ITEM[x.nom]?.prix ?? 0, fourni: x.fourni ?? ITEM[x.nom]?.fourni ?? "", cat: x.cat ?? ITEM[x.nom]?.cat ?? "—" });
 const lib = x => x.nom + (x.var ? " — " + x.var : "");
+// ID pour le give : celui du catalogue actuel, sinon celui figé dans la commande
+const idOf = x => { const a = ITEM[x.nom]; const cur = a ? (x.var ? a.varIds?.[x.var] : a.id) : ""; return cur || x.id || ""; };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const dateFR = s => s ? s.split("-").reverse().join("/") : "";
@@ -250,13 +260,16 @@ function confirmer(txt) {
 
 /* ---------- Onglets ---------- */
 function showTab(t) {
-  $("viewPerm").hidden = t !== "perm"; $("viewHist").hidden = t !== "hist";
-  $("tabPerm").classList.toggle("on", t === "perm"); $("tabHist").classList.toggle("on", t === "hist");
+  [["perm", "viewPerm", "tabPerm"], ["hist", "viewHist", "tabHist"], ["cat", "viewCat", "tabCat"]].forEach(([k, v, b]) => {
+    $(v).hidden = t !== k; $(b).classList.toggle("on", t === k);
+  });
   if (t === "hist") renderHist();
+  if (t === "cat") renderCat();
   try { sessionStorage.setItem("tab", t); } catch {}
 }
 $("tabPerm").onclick = () => showTab("perm");
 $("tabHist").onclick = () => showTab("hist");
+$("tabCat").onclick = () => showTab("cat");
 
 /* ---------- Permanence ---------- */
 INTENDANTS.forEach((it, i) => $("intendant").add(new Option(it.nom, i)));
@@ -384,7 +397,8 @@ $("saveOrder").onclick = () => {
   if (!items.length) return flash($("formMsg"), "Ajoute au moins un article.", false);
   const sansVar = items.find(x => ITEM[x.nom]?.variantes && !x.var);
   if (sansVar) return flash($("formMsg"), `Choisis la variante pour « ${sansVar.nom} ».`, false);
-  const o = { id: editId || Date.now().toString(36), client, type: $("clientType").value, notes: $("notes").value.trim(), items };
+  const fig = items.map(x => { const a = ITEM[x.nom]; return Object.assign(x, { prix: a.prix, fourni: a.fourni || "", cat: a.cat, id: (x.var ? a.varIds?.[x.var] : a.id) || "" }); });
+  const o = { id: editId || Date.now().toString(36), client, type: $("clientType").value, notes: $("notes").value.trim(), items: fig };
   const edit = !!editId;
   if (edit) state.orders = state.orders.map(x => x.id === editId ? o : x);
   else state.orders.push(o);
@@ -395,13 +409,13 @@ $("saveOrder").onclick = () => {
 };
 
 /* ---------- Calculs ---------- */
-const totalOrder = o => o.items.reduce((s, x) => s + (ITEM[x.nom]?.prix || 0) * x.qte, 0);
+const totalOrder = o => o.items.reduce((s, x) => s + infos(x).prix * x.qte, 0);
 const totalPerm = orders => orders.reduce((s, o) => s + totalOrder(o), 0);
 function agreger(orders) {
   const m = new Map();
   orders.forEach(o => o.items.forEach(x => {
     const k = lib(x);
-    if (!m.has(k)) m.set(k, { nom: k, base: x.nom, var: x.var || "", qte: 0, cat: ITEM[x.nom]?.cat || "—" });
+    if (!m.has(k)) m.set(k, { nom: k, base: x.nom, var: x.var || "", qte: 0, cat: infos(x).cat, id: idOf(x) });
     m.get(k).qte += x.qte;
   }));
   const ordre = n => { const i = CATALOGUE.findIndex(a => a.nom === n); return i < 0 ? 9999 : i; };
@@ -413,7 +427,7 @@ function htmlCommandes(orders, actions, permId) {
   return orders.map((o, i) => `<div class="order${permId && o.livreLe ? " livree" : ""}">
     <div class="order-head"><b>${i + 1}. ${esc(o.client)}</b><span class="hint">${esc(o.type)}</span>
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
-    <ul>${o.items.map(x => { const a = ITEM[x.nom]; return `<li>${x.qte} × ${esc(lib(x))}${a && a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
+    <ul>${o.items.map(x => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
     ${permId ? `<div class="row" style="margin-top:8px"><label class="liv"><input type="checkbox" data-liv="${permId}|${o.id}" ${o.livreLe ? "checked" : ""}> Livré</label>
       ${o.livreLe ? `<span class="hint">le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>` : ""}</div>` : ""}
@@ -461,7 +475,7 @@ function recapTexte(p) {
   return `📦 **Commande à l'administration — Permanence ${p.lieu} — ${dateFR(p.date)}** (${p.intendant})
 À déposer dans : **${p.coffre}**
 
-${agreger(p.orders).map(x => `• ${x.qte} × ${x.nom}`).join("\n")}
+${agreger(p.orders).map(x => `• ${x.qte} × ${x.nom} — ID : ${x.id || "⚠ manquant"}`).join("\n")}
 
 Clients : ${p.orders.map(o => o.client).join(", ")}
 Encaissé : ${fmt(totalPerm(p.orders))}`;
@@ -482,7 +496,7 @@ function snapshot() {
 async function envoyerDiscord(p) {
   const ag = agreger(p.orders), nb = ag.reduce((s, x) => s + x.qte, 0);
   const titre = `Permanence ${p.lieu} — ${dateFR(p.date)}`;
-  const embeds = chunks(ag.map(x => `\`${String(x.qte).padStart(3)}\` × ${x.nom}`), 3800).map((txt, i) => ({
+  const embeds = chunks(ag.map(x => `\`${String(x.qte).padStart(3)}\` × **${x.nom}** — ID : ${x.id ? "`" + x.id + "`" : "⚠ manquant"}`), 3800).map((txt, i) => ({
     title: i === 0 ? `📦 Commande à l'administration — ${titre}` : "📦 (suite)", description: txt, color: 0x7a1f1a
   }));
   embeds[0].fields = [
@@ -490,6 +504,8 @@ async function envoyerDiscord(p) {
     { name: "Coffre de dépôt", value: p.coffre, inline: true },
     { name: "Volume", value: `${p.orders.length} client(s) · ${nb} article(s)`, inline: true },
   ];
+  const sansId = ag.filter(x => !x.id).length;
+  if (sansId) embeds[0].fields.push({ name: "⚠ Attention", value: `${sansId} article(s) sans ID dans le catalogue`, inline: false });
   embeds[embeds.length - 1].footer = { text: `Encaissé : ${fmt(totalPerm(p.orders))}` };
   embeds[embeds.length - 1].timestamp = new Date().toISOString();
   const detail = chunks(p.orders.map((o, i) =>
@@ -596,6 +612,173 @@ function renderHist() {
     hist = hist.filter(p => p.id !== b.dataset.hd); saveHist(); renderHist();
   });
 }
+
+/* ---------- Gestion du catalogue ---------- */
+let catEdit = null;   // nom de l'article en cours de modification
+
+function saveCatalogue(msg) {
+  try { localStorage.setItem("catalogue", JSON.stringify(CATALOGUE)); } catch {}
+  rebuildItems();
+  // rafraîchit les listes de la saisie en cours sans perdre ce qui est choisi
+  document.querySelectorAll("#lines tbody tr").forEach(tr => {
+    const sel = tr.querySelector(".item"), v = tr.querySelector(".var").value;
+    remplirSelect(sel, sel.value); majVariante(tr, v);
+  });
+  calcForm(); render(); renderCat();
+  if (msg) flash($("cMsg"), msg, true);
+}
+
+function resetCatForm() {
+  catEdit = null;
+  ["cCat", "cNom", "cPrix", "cId", "cFourni", "cVar", "cNote"].forEach(id => $(id).value = "");
+  $("catFormTitle").textContent = "Ajouter un article";
+  $("cSave").textContent = "Ajouter au catalogue";
+  $("cCancel").style.display = "none";
+  $("catFormCard").classList.remove("editing");
+}
+$("cCancel").onclick = resetCatForm;
+
+$("cSave").onclick = () => {
+  const cat = $("cCat").value.trim(), nom = $("cNom").value.trim(), prixTxt = $("cPrix").value.trim();
+  const prix = Number(prixTxt);
+  if (!cat) return flash($("cMsg"), "Renseigne la catégorie.", false);
+  if (!nom) return flash($("cMsg"), "Renseigne le nom de l'article.", false);
+  if (prixTxt === "" || !Number.isFinite(prix) || prix < 0) return flash($("cMsg"), "Renseigne un prix valide.", false);
+  if (nom !== catEdit && ITEM[nom]) return flash($("cMsg"), `« ${nom} » existe déjà dans le catalogue.`, false);
+  const a = { cat, nom, fourni: $("cFourni").value.trim(), prix };
+  if ($("cId").value.trim()) a.id = $("cId").value.trim();
+  // "Blanc = 0A1B2C, Bleu" -> variantes + varIds
+  const ancien = catEdit ? ITEM[catEdit] : null;
+  const vars = [], varIds = {};
+  $("cVar").value.split(",").map(x => x.trim()).filter(Boolean).forEach(v => {
+    const [n, ...r] = v.split("="); const nomV = n.trim(), idV = r.join("=").trim();
+    if (!nomV || vars.includes(nomV)) return;
+    vars.push(nomV);
+    const garde = idV || ancien?.varIds?.[nomV] || "";
+    if (garde) varIds[nomV] = garde;
+  });
+  if (vars.length) { a.variantes = vars; if (Object.keys(varIds).length) a.varIds = varIds; }
+  if ($("cNote").value.trim()) a.note = $("cNote").value.trim();
+
+  CATALOGUE = CATALOGUE.slice();
+  if (catEdit) {
+    const i = CATALOGUE.findIndex(x => x.nom === catEdit);
+    if (CATALOGUE[i].cat === cat) CATALOGUE[i] = a;
+    else { CATALOGUE.splice(i, 1); insererDansCategorie(a); }
+  } else insererDansCategorie(a);
+  const modif = !!catEdit;
+  resetCatForm();
+  saveCatalogue(modif ? `« ${nom} » modifié.` : `« ${nom} » ajouté au catalogue.`);
+};
+
+// place l'article à la fin de sa catégorie (ou crée la catégorie à la fin)
+function insererDansCategorie(a) {
+  let last = -1;
+  CATALOGUE.forEach((x, i) => { if (x.cat === a.cat) last = i; });
+  if (last < 0) CATALOGUE.push(a); else CATALOGUE.splice(last + 1, 0, a);
+}
+
+function renderCat() {
+  $("nbArticles").textContent = CATALOGUE.length;
+  const cats = [...new Set(CATALOGUE.map(a => a.cat))];
+  $("catList").innerHTML = ""; cats.forEach(c => $("catList").append(new Option(c)));
+  const q = $("cSearch").value.trim().toLowerCase(), seulSansId = $("cMissing").checked;
+  majCompteurId();
+  const list = CATALOGUE.filter(a => (!q || (a.nom + " " + a.cat + " " + (a.fourni || "") + " " + (a.id || "") + " " + Object.values(a.varIds || {}).join(" ")).toLowerCase().includes(q))
+    && (!seulSansId || manqueId(a)));
+  if (!list.length) { $("catTable").innerHTML = '<p class="empty">Aucun article.</p>'; return; }
+  let cur = null, rows = "";
+  list.forEach(a => {
+    if (a.cat !== cur) { rows += `<tr class="cat-head"><td colspan="5">${esc(a.cat)}</td></tr>`; cur = a.cat; }
+    const idCell = a.variantes
+      ? a.variantes.map(v => `<div class="id-var">${esc(v)} <input class="id-input${a.varIds?.[v] ? "" : " missing"}" data-idnom="${esc(a.nom)}" data-idvar="${esc(v)}" value="${esc(a.varIds?.[v] || "")}" placeholder="ID"></div>`).join("")
+      : `<input class="id-input${a.id ? "" : " missing"}" data-idnom="${esc(a.nom)}" value="${esc(a.id || "")}" placeholder="ID">`;
+    rows += `<tr class="cat-row"><td><b>${esc(a.nom)}</b>${a.variantes ? `<br><span class="hint">${a.variantes.length} variantes</span>` : ""}${a.note ? `<br><span class="hint">⚠ ${esc(a.note)}</span>` : ""}</td>
+      <td class="f hint">${a.fourni ? "Fournit : " + esc(a.fourni) : ""}</td>
+      <td class="p">${fmt(a.prix)}</td>
+      <td class="idc">${idCell}</td>
+      <td class="act"><button class="btn small" data-ce="${esc(a.nom)}">Modifier</button> <button class="btn small" data-cd="${esc(a.nom)}">Supprimer</button></td></tr>`;
+  });
+  $("catTable").innerHTML = `<table><thead><tr><th>Article</th><th>À fournir</th><th style="text-align:right">Prix</th><th style="text-align:right">ID Item</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  $("catTable").querySelectorAll("[data-ce]").forEach(b => b.onclick = () => {
+    const a = ITEM[b.dataset.ce];
+    catEdit = a.nom;
+    $("cCat").value = a.cat; $("cNom").value = a.nom; $("cPrix").value = a.prix;
+    $("cId").value = a.id || "";
+    $("cFourni").value = a.fourni || ""; $("cNote").value = a.note || "";
+    $("cVar").value = (a.variantes || []).map(v => a.varIds?.[v] ? `${v} = ${a.varIds[v]}` : v).join(", ");
+    $("catFormTitle").textContent = "Modifier « " + a.nom + " »";
+    $("cSave").textContent = "Enregistrer la modification";
+    $("cCancel").style.display = "";
+    $("catFormCard").classList.add("editing");
+    $("catFormCard").scrollIntoView({ behavior: "smooth" });
+  });
+  $("catTable").querySelectorAll("[data-idnom]").forEach(inp => inp.onchange = () => {
+    const i = CATALOGUE.findIndex(x => x.nom === inp.dataset.idnom); if (i < 0) return;
+    CATALOGUE = CATALOGUE.slice();
+    const a = Object.assign({}, CATALOGUE[i]), val = inp.value.trim();
+    if (inp.dataset.idvar !== undefined) {
+      a.varIds = Object.assign({}, a.varIds);
+      if (val) a.varIds[inp.dataset.idvar] = val; else delete a.varIds[inp.dataset.idvar];
+      if (!Object.keys(a.varIds).length) delete a.varIds;
+    } else if (val) a.id = val; else delete a.id;
+    CATALOGUE[i] = a;
+    inp.classList.toggle("missing", !val);
+    // sauvegarde légère : pas de re-rendu pour ne pas perdre le focus
+    try { localStorage.setItem("catalogue", JSON.stringify(CATALOGUE)); } catch {}
+    rebuildItems(); majCompteurId();
+  });
+  $("catTable").querySelectorAll("[data-cd]").forEach(b => b.onclick = async () => {
+    const nom = b.dataset.cd;
+    if (!await confirmer(`Retirer « ${nom} » du catalogue ? Les commandes déjà enregistrées ne sont pas modifiées.`)) return;
+    CATALOGUE = CATALOGUE.filter(x => x.nom !== nom);
+    if (catEdit === nom) resetCatForm();
+    saveCatalogue(`« ${nom} » retiré du catalogue.`);
+  });
+}
+$("cSearch").oninput = renderCat;
+$("cMissing").onchange = renderCat;
+
+const manqueId = a => a.variantes ? a.variantes.some(v => !a.varIds?.[v]) : !a.id;
+function majCompteurId() {
+  const n = CATALOGUE.filter(manqueId).length;
+  $("nbMissing").textContent = n ? `${n} article(s) sans ID complet` : "✔ Tous les articles ont un ID";
+}
+
+// Sauvegarde / partage
+$("cExport").onclick = () => {
+  const blob = new Blob([JSON.stringify(CATALOGUE, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "catalogue-" + today() + ".json";
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$("cImport").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    const ok = Array.isArray(data) && data.length && data.every(a => a && typeof a.nom === "string" && typeof a.cat === "string" && Number.isFinite(Number(a.prix)));
+    if (!ok) throw new Error("format invalide");
+    if (!await confirmer(`Remplacer le catalogue actuel par celui du fichier (${data.length} articles) ?`)) return;
+    CATALOGUE = data.map(a => Object.assign({}, a, { prix: Number(a.prix), fourni: a.fourni || "" }));
+    resetCatForm(); saveCatalogue();
+    flash($("cSaveMsg"), `Catalogue importé (${CATALOGUE.length} articles).`, true);
+  } catch (err) { flash($("cSaveMsg"), "Import impossible : " + err.message, false); }
+};
+$("cCopyJs").onclick = async () => {
+  const lignes = CATALOGUE.map(a => "  { " + Object.entries(a).map(([k, v]) => k + ": " + JSON.stringify(v).replace(/","/g, '", "')).join(", ") + " },");
+  const txt = "const CATALOGUE_DEFAUT = [\n" + lignes.join("\n") + "\n];";
+  try { await navigator.clipboard.writeText(txt); flash($("cSaveMsg"), "Copié. Colle-le dans script.js à la place du bloc CATALOGUE_DEFAUT.", true); }
+  catch { flash($("cSaveMsg"), "Copie impossible sur ce navigateur.", false); }
+};
+$("cReset").onclick = async () => {
+  if (!await confirmer("Revenir au catalogue d'origine ? Tes ajouts et suppressions faits ici seront perdus.")) return;
+  CATALOGUE = CATALOGUE_DEFAUT;
+  try { localStorage.removeItem("catalogue"); } catch {}
+  resetCatForm(); saveCatalogue();
+  flash($("cSaveMsg"), "Catalogue d'origine rétabli.", true);
+};
 
 /* ---------- Démarrage ---------- */
 majLieux();
