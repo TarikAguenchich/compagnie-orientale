@@ -373,7 +373,7 @@ function htmlCommandes(orders, actions, permId) {
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
     <ul>${o.items.map(x => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
-    ${permId ? `<div class="row" style="margin-top:8px"><label class="liv"><input type="checkbox" data-liv="${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""} ${estAdmin() ? "" : "disabled"}> Livré</label>
+    ${permId ? `<div class="row" style="margin-top:8px"><label class="liv"><input type="checkbox" data-liv="${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""}> Livré</label>
       ${o.livreLe ? `<span class="hint">le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>` : ""}</div>` : ""}
     ${actions ? `<div class="row" style="margin-top:8px"><button class="btn small" data-e="${o.id}">Modifier</button><button class="btn small" data-d="${o.id}">Supprimer</button></div>` : ""}
   </div>`).join("");
@@ -502,7 +502,7 @@ function renderHist() {
     const p = hist.find(x => x.id === pid), o = p.orders.find(x => x.id === oid);
     o.livreLe = c.checked ? new Date().toISOString() : null;
     renderHist();
-    const { error } = await sb.from("permanences").update({ orders: p.orders }).eq("id", pid);
+    const { error } = await sb.rpc("marquer_livre", { pid, oid, livre: c.checked });
     if (error) { flash($("hm-" + pid), "Non enregistré : " + error.message, false); chargerHist(); }
   });
   box.querySelectorAll("[data-hc]").forEach(b => b.onclick = () => copier(recapTexte(hist.find(p => p.id === b.dataset.hc)), $("hm-" + b.dataset.hc)));
