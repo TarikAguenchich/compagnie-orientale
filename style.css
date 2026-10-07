@@ -101,4 +101,16 @@ code{font-size:.85em;background:var(--soft);padding:1px 4px;border-radius:3px}
 .id-input.missing{border-color:var(--err);background:transparent}
 .id-var{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:2px 0;font-size:.8rem;color:var(--muted)}
 .cat-row td.idc{text-align:right;white-space:nowrap}
-@media (max-width:680px){ .cat-row td.idc{grid-column:1 / -1;text-align:left} .id-var{justify-content:flex-start} }
+@media (max-width:680px){ .cat-row td.idc{grid-column:1 / -1;text-align:left} .id-var{justify-content:flex-start} }.grid4{grid-template-columns:1fr 1fr 1fr 1fr}
+@media (max-width:820px){.grid4{grid-template-columns:1fr 1fr}}
+@media (max-width:680px){.grid4{grid-template-columns:1fr}}
+.reg-add input{flex:2 1 200px;width:auto}
+.reg-add select{flex:1 1 160px;width:auto}
+.reg-row td.reg-lien{width:220px}
+.reg-row td.reg-lien select{padding:4px 8px;font-size:.95rem}
+.reg-row td.act{white-space:nowrap;text-align:right;width:1%}
+@media (max-width:680px){
+  .reg-row{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .reg-row td{border:none;padding:0}
+  .reg-row td.reg-lien{grid-column:1 / -1;grid-row:2;width:auto}
+}

@@ -17,6 +17,7 @@
     <button type="button" id="tabPerm" class="on">Permanence en cours</button>
     <button type="button" id="tabHist">Historique</button>
     <button type="button" id="tabCat">Catalogue</button>
+    <button type="button" id="tabReg">Réglages</button>
   </nav>
   <p class="hint" id="dbStatus" style="margin:-8px 0 14px"></p>
 
@@ -24,9 +25,10 @@
   <!-- 1. Permanence -->
   <div class="card">
     <h2>Permanence</h2>
-    <div class="grid">
+    <div class="grid grid4">
       <div><label for="intendant">Intendant</label><select id="intendant"></select></div>
       <div><label for="lieu">Châtellerie</label><select id="lieu"></select></div>
+      <div><label for="coffre">Coffre</label><select id="coffre"></select></div>
       <div><label for="date">Date</label><input type="date" id="date"></div>
     </div>
   </div>
@@ -139,6 +141,30 @@
       <div class="row">
         <button type="button" class="btn" id="cExport">Exporter (.json)</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Réglages -->
+  <div id="viewReg" hidden>
+    <div class="card">
+      <h2>Intendants</h2>
+      <div class="row reg-add"><input id="rInt" placeholder="Nom de l'intendant" autocomplete="off"><button type="button" class="btn primary" id="rIntAdd">Ajouter</button></div>
+      <div class="msg" id="rIntMsg"></div>
+      <div id="regInt" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
+      <h2>Châtelleries</h2>
+      <div class="row reg-add"><input id="rLieu" placeholder="Nom de la châtellerie" autocomplete="off"><select id="rLieuInt" title="Intendant"></select><button type="button" class="btn primary" id="rLieuAdd">Ajouter</button></div>
+      <div class="msg" id="rLieuMsg"></div>
+      <p class="hint">La liste à droite indique l'intendant qui tient la permanence dans cette châtellerie : tu peux le changer directement.</p>
+      <div id="regLieu"></div>
+    </div>
+    <div class="card">
+      <h2>Coffres</h2>
+      <div class="row reg-add"><input id="rCof" placeholder="Nom du coffre" autocomplete="off"><select id="rCofInt" title="Intendant"></select><button type="button" class="btn primary" id="rCofAdd">Ajouter</button></div>
+      <div class="msg" id="rCofMsg"></div>
+      <p class="hint">La liste à droite indique l'intendant qui utilise ce coffre : tu peux le changer directement.</p>
+      <div id="regCof"></div>
     </div>
   </div>
 </div>

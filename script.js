@@ -2,17 +2,14 @@
    CONFIG
    ========================================================= */
 // Supabase > Project Settings > API (ou Data API)
-const SUPABASE_URL = "https://ipdenjiyngkwweklbdbf.supabase.co";
-const SUPABASE_KEY = "sb_publishable_Lv560D7iNF9V_d35b-EEyA_FzbYF9od";
+const SUPABASE_URL = "https://XXXXXXXX.supabase.co";
+const SUPABASE_KEY = "COLLE_ICI_LA_CLE_ANON_PUBLIC";
 
 const WEBHOOK_URL   = "https://discord.com/api/webhooks/1552560280481833070/fM56DVf7LqtqifvuFinmTgpbhDatkxSHwXYWomq1cQKTjneYrGrmPdvSm3YQH8CHhb3b";
 const ROLE_ID_MODOS = "1552559545828642868";   // "" = pas de ping
 const MONNAIE       = "septims";
 
-const INTENDANTS = [
-  { nom: "Motuu",       coffre: "Coffre de Motuu",       lieux: ["Solitude", "Morthal", "Markarth"] },
-  { nom: "Bérin Pépin", coffre: "Coffre de Bérin Pépin", lieux: ["Vendeaume", "Fort-Hiver", "Aubétoile", "Faillaise", "Blancherive", "Epervine"] },
-];
+// Intendants, châtelleries et coffres : page « Réglages » du site (tables Supabase)
 const INSTITUTIONS = ["Thalmor", "Empire", "Académie des Mages"];
 
 /* =========================================================
@@ -45,7 +42,11 @@ const lib = x => x.nom + (x.var ? " — " + x.var : "");
 // ID pour le give : celui du catalogue actuel, sinon celui figé dans la commande
 const idOf = x => { const a = ITEM[cle(x)]; const cur = a ? (x.var ? a.varIds?.[x.var] : a.id) : ""; return cur || x.id || ""; };
 
-let state = { intendant: 0, lieu: "", date: today(), orders: [], draft: null };
+// Intendants / châtelleries / coffres (copie locale pour l'affichage immédiat)
+let REG = { intendants: [], chatelleries: [], coffres: [] };
+try { const r = JSON.parse(localStorage.getItem("reglages_cache")); if (r && Array.isArray(r.intendants)) REG = r; } catch {}
+
+let state = { intendantId: "", lieu: "", coffre: "", date: today(), orders: [], draft: null };
 let hist = [];
 try { const s = JSON.parse(localStorage.getItem("perm_state")); if (s && Array.isArray(s.orders)) state = Object.assign(state, s); } catch {}
 const save = () => { try { localStorage.setItem("perm_state", JSON.stringify(state)); } catch {} };
@@ -78,17 +79,32 @@ async function chargerHist() {
   if (error) { $("hist").innerHTML = `<p class="empty">Historique indisponible : ${esc(error.message)}</p>`; return; }
   hist = data.map(r => ({ id: r.id, intendant: r.intendant, coffre: r.coffre, lieu: r.lieu, date: r.date, orders: r.orders || [],
     clotureLe: r.cloture_le, discord: r.discord, envoyeLe: r.envoye_le }));
+  majFiltres();
   if (!$("viewHist").hidden) renderHist();
 }
 
+async function chargerReglages() {
+  const [i, c, k] = await Promise.all(["intendants", "chatelleries", "coffres"].map(t => sb.from(t).select("*").order("nom")));
+  const err = [i, c, k].find(r => r.error);
+  if (err) { statut("⚠ Intendants / châtelleries non chargés : " + err.error.message + " (as-tu lancé 3_intendants.sql ?)"); return; }
+  REG = { intendants: i.data, chatelleries: c.data, coffres: k.data };
+  try { localStorage.setItem("reglages_cache", JSON.stringify(REG)); } catch {}
+  majPermanence(); majFiltres();
+  if (!$("viewReg").hidden) renderReg();
+}
+
 // Les autres pages ouvertes se mettent à jour toutes seules
-let tCat = null, tHist = null;
+let tCat = null, tHist = null, tReg = null;
+const majReg = () => { clearTimeout(tReg); tReg = setTimeout(chargerReglages, 400); };
 sb.channel("maj")
+  .on("postgres_changes", { event: "*", schema: "public", table: "intendants" }, majReg)
+  .on("postgres_changes", { event: "*", schema: "public", table: "chatelleries" }, majReg)
+  .on("postgres_changes", { event: "*", schema: "public", table: "coffres" }, majReg)
   .on("postgres_changes", { event: "*", schema: "public", table: "articles" }, () => { clearTimeout(tCat); tCat = setTimeout(chargerCatalogue, 400); })
   .on("postgres_changes", { event: "*", schema: "public", table: "permanences" }, () => { clearTimeout(tHist); tHist = setTimeout(chargerHist, 400); })
   .subscribe();
 // Filet de sécurité : rechargement quand on revient sur l'onglet
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { chargerCatalogue(); chargerHist(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { chargerCatalogue(); chargerHist(); chargerReglages(); } });
 
 /* ---------- Confirmation dans la page ---------- */
 function confirmer(txt) {
@@ -102,33 +118,47 @@ function confirmer(txt) {
 
 /* ---------- Onglets ---------- */
 function showTab(t) {
-  [["perm", "viewPerm", "tabPerm"], ["hist", "viewHist", "tabHist"], ["cat", "viewCat", "tabCat"]].forEach(([k, v, b]) => {
+  [["perm", "viewPerm", "tabPerm"], ["hist", "viewHist", "tabHist"], ["cat", "viewCat", "tabCat"], ["reg", "viewReg", "tabReg"]].forEach(([k, v, b]) => {
     $(v).hidden = t !== k; $(b).classList.toggle("on", t === k);
   });
   if (t === "hist") renderHist();
   if (t === "cat") renderCat();
+  if (t === "reg") renderReg();
   try { sessionStorage.setItem("tab", t); } catch {}
 }
 $("tabPerm").onclick = () => showTab("perm");
 $("tabHist").onclick = () => showTab("hist");
 $("tabCat").onclick = () => showTab("cat");
+$("tabReg").onclick = () => showTab("reg");
 
 /* ---------- Permanence ---------- */
-INTENDANTS.forEach((it, i) => $("intendant").add(new Option(it.nom, i)));
 INSTITUTIONS.forEach(n => $("institutions").append(new Option(n)));
 
-function majLieux() {
-  const it = INTENDANTS[$("intendant").value];
-  $("lieu").innerHTML = "";
-  it.lieux.forEach(l => $("lieu").add(new Option(l, l)));
-  if (it.lieux.includes(state.lieu)) $("lieu").value = state.lieu;
-  state.intendant = +$("intendant").value; state.lieu = $("lieu").value; save();
+const remplir = (sel, noms, vide) => { sel.innerHTML = ""; if (!noms.length) sel.add(new Option(vide, "")); noms.forEach(n => sel.add(new Option(n, n))); };
+const intendantCourant = () => REG.intendants.find(i => String(i.id) === String(state.intendantId));
+
+// Listes de la permanence : châtelleries et coffres de l'intendant choisi
+function majPermanence() {
+  const selI = $("intendant");
+  selI.innerHTML = "";
+  if (!REG.intendants.length) selI.add(new Option("— aucun intendant (voir Réglages) —", ""));
+  REG.intendants.forEach(i => selI.add(new Option(i.nom, i.id)));
+  if (!intendantCourant() && REG.intendants.length) state.intendantId = String(REG.intendants[0].id);
+  selI.value = state.intendantId;
+  const it = intendantCourant();
+  const lieux = REG.chatelleries.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
+  const coffres = REG.coffres.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
+  remplir($("lieu"), lieux, "— aucune châtellerie —");
+  remplir($("coffre"), coffres, "— aucun coffre —");
+  if (lieux.includes(state.lieu)) $("lieu").value = state.lieu;
+  if (coffres.includes(state.coffre)) $("coffre").value = state.coffre;
+  state.lieu = $("lieu").value; state.coffre = $("coffre").value; save();
   render();
 }
-$("intendant").value = state.intendant;
 $("date").value = state.date || today();
-$("intendant").onchange = majLieux;
+$("intendant").onchange = () => { state.intendantId = $("intendant").value; majPermanence(); };
 $("lieu").onchange = () => { state.lieu = $("lieu").value; save(); };
+$("coffre").onchange = () => { state.coffre = $("coffre").value; save(); render(); };
 $("date").onchange = () => { state.date = $("date").value; save(); };
 
 /* ---------- Saisie d'une commande ---------- */
@@ -320,7 +350,7 @@ function render() {
     chargerForm({ client: o.client, type: o.type, notes: o.notes, lines: o.items });
     $("formCard").scrollIntoView({ behavior: "smooth" });
   });
-  $("recap").innerHTML = state.orders.length ? htmlRecap(state.orders, INTENDANTS[state.intendant].coffre) : '<p class="empty">Le récapitulatif apparaîtra ici.</p>';
+  $("recap").innerHTML = state.orders.length ? htmlRecap(state.orders, state.coffre || "—") : '<p class="empty">Le récapitulatif apparaîtra ici.</p>';
 }
 
 /* ---------- Discord ---------- */
@@ -371,8 +401,7 @@ async function envoyerDiscord(p) {
 }
 
 function snapshot() {
-  const it = INTENDANTS[state.intendant];
-  return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), intendant: it.nom, coffre: it.coffre, lieu: state.lieu, date: state.date,
+  return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), intendant: intendantCourant()?.nom || "", coffre: state.coffre, lieu: state.lieu, date: state.date,
            orders: JSON.parse(JSON.stringify(state.orders)), clotureLe: new Date().toISOString(), discord: false };
 }
 const versPerm = p => ({ id: p.id, intendant: p.intendant, coffre: p.coffre, lieu: p.lieu, date: p.date || null, orders: p.orders,
@@ -381,6 +410,9 @@ const versPerm = p => ({ id: p.id, intendant: p.intendant, coffre: p.coffre, lie
 $("send").onclick = async () => {
   if (!state.orders.length) return flash($("sendMsg"), "Aucune commande dans cette permanence.", false);
   if (!state.date) return flash($("sendMsg"), "Renseigne la date.", false);
+  if (!intendantCourant()) return flash($("sendMsg"), "Choisis l'intendant (à créer dans Réglages s'il n'existe pas).", false);
+  if (!state.lieu) return flash($("sendMsg"), "Choisis la châtellerie (à rattacher à l'intendant dans Réglages).", false);
+  if (!state.coffre) return flash($("sendMsg"), "Choisis le coffre (à rattacher à l'intendant dans Réglages).", false);
   if (!await confirmer(`Clôturer la permanence (${state.orders.length} client(s)) et commander aux administrateurs impériaux ?`)) return;
 
   const p = snapshot();
@@ -417,8 +449,16 @@ $("reset").onclick = async () => {
 };
 
 /* ---------- Historique (Supabase) ---------- */
-INTENDANTS.forEach(it => $("fInt").add(new Option(it.nom, it.nom)));
-[...new Set(INTENDANTS.flatMap(it => it.lieux))].forEach(l => $("fLieu").add(new Option(l, l)));
+// Filtres : intendants / châtelleries actuels + ceux présents dans l'historique
+function majFiltres() {
+  [["fInt", REG.intendants.map(i => i.nom), hist.map(p => p.intendant), "Tous"],
+   ["fLieu", REG.chatelleries.map(c => c.nom), hist.map(p => p.lieu), "Toutes"]].forEach(([id, a, b, tous]) => {
+    const sel = $(id), garde = sel.value;
+    sel.innerHTML = `<option value="">${tous}</option>`;
+    [...new Set([...a, ...b].filter(Boolean))].sort((x, y) => x.localeCompare(y, "fr")).forEach(n => sel.add(new Option(n, n)));
+    sel.value = garde;
+  });
+}
 $("fInt").onchange = $("fLieu").onchange = $("fClient").oninput = renderHist;
 
 function renderHist() {
@@ -617,11 +657,75 @@ $("cExport").onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 
+/* ---------- Réglages : intendants, châtelleries, coffres ---------- */
+const TABLES = {
+  intendants:   { nom: "intendant",   liste: "regInt",  champ: "rInt",  msg: "rIntMsg" },
+  chatelleries: { nom: "châtellerie", liste: "regLieu", champ: "rLieu", msg: "rLieuMsg", lien: "rLieuInt" },
+  coffres:      { nom: "coffre",      liste: "regCof",  champ: "rCof",  msg: "rCofMsg",  lien: "rCofInt" },
+};
+const nomIntendant = id => REG.intendants.find(i => String(i.id) === String(id))?.nom;
+const optionsIntendants = choisi => `<option value="">— aucun —</option>` +
+  REG.intendants.map(i => `<option value="${i.id}" ${String(i.id) === String(choisi ?? "") ? "selected" : ""}>${esc(i.nom)}</option>`).join("");
+
+function renderReg() {
+  // listes "rattaché à" des formulaires d'ajout
+  ["rLieuInt", "rCofInt"].forEach(id => { const g = $(id).value; $(id).innerHTML = optionsIntendants(g || state.intendantId); });
+  Object.entries(TABLES).forEach(([table, t]) => {
+    const rows = REG[table];
+    if (!rows.length) { $(t.liste).innerHTML = `<p class="empty">Aucun(e) ${t.nom}.</p>`; return; }
+    $(t.liste).innerHTML = `<table><tbody>${rows.map(r => {
+      let info = "";
+      if (table === "intendants") {
+        const l = REG.chatelleries.filter(c => String(c.intendant_id) === String(r.id)).map(c => c.nom);
+        const c = REG.coffres.filter(c => String(c.intendant_id) === String(r.id)).map(c => c.nom);
+        info = `<span class="hint">${l.length ? esc(l.join(", ")) : "aucune châtellerie"} · ${c.length ? esc(c.join(", ")) : "aucun coffre"}</span>`;
+      }
+      return `<tr class="reg-row"><td><b>${esc(r.nom)}</b>${info ? "<br>" + info : ""}</td>
+        ${t.lien ? `<td class="reg-lien"><select data-lien="${table}|${r.id}">${optionsIntendants(r.intendant_id)}</select></td>` : ""}
+        <td class="act"><button class="btn small" data-rdel="${table}|${r.id}">Supprimer</button></td></tr>`;
+    }).join("")}</tbody></table>`;
+  });
+  $("viewReg").querySelectorAll("[data-lien]").forEach(sel => sel.onchange = async () => {
+    const [table, id] = sel.dataset.lien.split("|");
+    const { error } = await sb.from(table).update({ intendant_id: sel.value ? Number(sel.value) : null }).eq("id", id);
+    if (error) return flash($(TABLES[table].msg), "Non enregistré : " + error.message, false);
+    flash($(TABLES[table].msg), "Rattachement enregistré.", true);
+    await chargerReglages();
+  });
+  $("viewReg").querySelectorAll("[data-rdel]").forEach(b => b.onclick = async () => {
+    const [table, id] = b.dataset.rdel.split("|"), t = TABLES[table];
+    const r = REG[table].find(x => String(x.id) === id);
+    const suite = table === "intendants" ? " Ses châtelleries et coffres resteront, sans intendant." : "";
+    if (!await confirmer(`Supprimer ${t.nom === "intendant" ? "l'intendant" : t.nom === "coffre" ? "le coffre" : "la châtellerie"} « ${r.nom} » (pour tout le monde) ?${suite} L'historique n'est pas modifié.`)) return;
+    const { error } = await sb.from(table).delete().eq("id", id);
+    if (error) return flash($(t.msg), "Suppression impossible : " + error.message, false);
+    flash($(t.msg), `« ${r.nom} » supprimé.`, true);
+    await chargerReglages();
+  });
+}
+
+Object.entries(TABLES).forEach(([table, t]) => {
+  const ajouter = async () => {
+    const nom = $(t.champ).value.trim();
+    if (!nom) return flash($(t.msg), "Renseigne le nom.", false);
+    if (REG[table].some(x => x.nom.toLowerCase() === nom.toLowerCase())) return flash($(t.msg), `« ${nom} » existe déjà.`, false);
+    const ligne = { nom };
+    if (t.lien) ligne.intendant_id = $(t.lien).value ? Number($(t.lien).value) : null;
+    const { error } = await sb.from(table).insert(ligne);
+    if (error) return flash($(t.msg), "Non enregistré : " + error.message, false);
+    $(t.champ).value = "";
+    flash($(t.msg), `« ${nom} » ajouté.`, true);
+    await chargerReglages();
+  };
+  $(t.champ + "Add").onclick = ajouter;
+  $(t.champ).onkeydown = e => { if (e.key === "Enter") ajouter(); };
+});
+
 /* ---------- Démarrage ---------- */
-majLieux();
+majPermanence(); majFiltres();
 chargerForm(state.draft);
 render();
 let t0 = "perm"; try { t0 = sessionStorage.getItem("tab") || "perm"; } catch {}
 showTab(t0);
 if (SUPABASE_URL.includes("XXXXXXXX")) statut("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.");
-else { chargerCatalogue(); chargerHist(); }
+else { chargerReglages(); chargerCatalogue(); chargerHist(); }
