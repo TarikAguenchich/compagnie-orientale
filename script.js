@@ -2,8 +2,8 @@
    CONFIG
    ========================================================= */
 // Supabase > Project Settings > API (ou Data API)
-const SUPABASE_URL = "https://XXXXXXXX.supabase.co";
-const SUPABASE_KEY = "COLLE_ICI_LA_CLE_ANON_PUBLIC";
+const SUPABASE_URL = "https://ipdenjiyngkwweklbdbf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Lv560D7iNF9V_d35b-EEyA_FzbYF9od";
 
 const WEBHOOK_URL   = "https://discord.com/api/webhooks/1552560280481833070/fM56DVf7LqtqifvuFinmTgpbhDatkxSHwXYWomq1cQKTjneYrGrmPdvSm3YQH8CHhb3b";
 const ROLE_ID_MODOS = "1552559545828642868";   // "" = pas de ping
