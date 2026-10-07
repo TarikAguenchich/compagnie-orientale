@@ -82,7 +82,7 @@ async function chargerHist() {
   hist = data.map(r => ({ id: r.id, intendant: r.intendant, coffre: r.coffre, lieu: r.lieu, date: r.date, orders: r.orders || [],
     clotureLe: r.cloture_le, cloturePar: r.cloture_par, discord: r.discord, envoyeLe: r.envoye_le }));
   majFiltres();
-  if (!$("viewHist").hidden) renderHist();
+  renderHist();
 }
 
 async function chargerReglages() {
@@ -120,18 +120,20 @@ function confirmer(txt) {
 }
 
 /* ---------- Onglets ---------- */
+let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
   if (!estAdmin() && (t === "cat" || t === "reg")) t = "perm";
-  [["perm", "viewPerm", "tabPerm"], ["hist", "viewHist", "tabHist"], ["cat", "viewCat", "tabCat"], ["reg", "viewReg", "tabReg"]].forEach(([k, v, b]) => {
-    $(v).hidden = t !== k; $(b).classList.toggle("on", t === k);
-  });
-  if (t === "hist") renderHist();
+  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", cat: "viewCat", reg: "viewReg" };
+  ["viewPerm", "viewHist", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
+  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
+  if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
   if (t === "cat") renderCat();
   if (t === "reg") renderReg();
   try { sessionStorage.setItem("tab", t); } catch {}
 }
 $("tabPerm").onclick = () => showTab("perm");
 $("tabHist").onclick = () => showTab("hist");
+$("tabEnc").onclick = () => showTab("enc");
 $("tabCat").onclick = () => showTab("cat");
 $("tabReg").onclick = () => showTab("reg");
 
@@ -441,8 +443,8 @@ $("send").onclick = async () => {
   // archivée : on vide la permanence
   state.orders = []; editId = null; state.draft = null; save();
   resetForm(); render(); chargerHist();
-  if (data.discord) flash($("sendMsg"), "Commande transmise aux administrateurs impériaux ✔ Permanence clôturée et archivée dans l'historique.", true);
-  else flash($("sendMsg"), `Permanence clôturée et archivée, mais pas transmise sur Discord (${data.erreur}). Tu pourras la renvoyer depuis l'onglet Historique.`, false);
+  if (data.discord) flash($("sendMsg"), "Commande transmise aux administrateurs impériaux ✔ Elle est maintenant dans « Commandes en cours ».", true);
+  else flash($("sendMsg"), `Permanence clôturée et archivée, mais pas transmise sur Discord (${data.erreur}). Tu pourras la renvoyer depuis l'onglet Commandes en cours.`, false);
 };
 
 async function copier(txt, el) {
@@ -473,12 +475,20 @@ function majFiltres() {
 }
 $("fInt").onchange = $("fLieu").onchange = $("fClient").oninput = renderHist;
 
+const toutLivre = p => p.orders.length > 0 && p.orders.every(o => o.livreLe);
 function renderHist() {
+  const enCours = hist.filter(p => !toutLivre(p));
+  $("nbEnc").textContent = enCours.length; $("nbEnc").hidden = !enCours.length;
+  if ($("viewHist").hidden) return;
+  const base = MODE === "enc" ? enCours : hist.filter(toutLivre);
+  $("histIntro").textContent = (MODE === "enc"
+    ? "Permanences transmises dont tout n'est pas encore livré. Coche « Livré » pour chaque client : quand tout est livré, la permanence passe dans l'historique."
+    : "Permanences entièrement livrées.") + (estAdmin() ? " Tu vois celles de tous les intendants." : " Tu ne vois que celles que tu as clôturées.");
   const fi = $("fInt").value, fl = $("fLieu").value, fc = $("fClient").value.trim().toLowerCase();
-  const list = hist.filter(p => (!fi || p.intendant === fi) && (!fl || p.lieu === fl) &&
+  const list = base.filter(p => (!fi || p.intendant === fi) && (!fl || p.lieu === fl) &&
     (!fc || p.orders.some(o => o.client.toLowerCase().includes(fc))));
   const box = $("hist");
-  if (!hist.length) { box.innerHTML = '<p class="empty">Aucune permanence clôturée pour l\'instant.</p>'; return; }
+  if (!base.length) { box.innerHTML = `<p class="empty">${MODE === "enc" ? "Aucune commande en cours : tout a été livré." : "Aucune permanence entièrement livrée pour l'instant."}</p>`; return; }
   if (!list.length) { box.innerHTML = '<p class="empty">Aucune permanence ne correspond aux filtres.</p>'; return; }
   const ouverts = new Set([...box.querySelectorAll("details[open]")].map(d => d.dataset.id));
   box.innerHTML = list.map(p => {
@@ -493,7 +503,7 @@ function renderHist() {
         <div class="hint">Clôturée le ${new Date(p.clotureLe).toLocaleString("fr-FR")}${p.cloturePar ? " par " + esc(p.cloturePar) : ""}${p.discord && p.envoyeLe ? " — transmise le " + new Date(p.envoyeLe).toLocaleString("fr-FR") : ""}</div>
         <h3>Commandé à l'administration</h3>${htmlRecap(p.orders, p.coffre)}
         <h3>Commandes détaillées</h3>${htmlCommandes(p.orders, false, p.id)}
-        <div class="row" style="margin-top:8px">${p.discord ? "" : `<button class="btn small primary" data-hs="${esc(p.id)}">Transmettre aux administrateurs</button>`}<button class="btn small" data-hc="${esc(p.id)}">Copier le récap</button>${estAdmin() ? `<button class="btn small" data-hd="${esc(p.id)}">Supprimer de l'historique</button>` : ""}</div>
+        <div class="row" style="margin-top:8px">${p.discord ? "" : `<button class="btn small primary" data-hs="${esc(p.id)}">Transmettre aux administrateurs</button>`}<button class="btn small" data-hc="${esc(p.id)}">Copier le récap</button>${estAdmin() ? `<button class="btn small" data-hd="${esc(p.id)}">Supprimer</button>` : ""}</div>
         <div class="msg" id="hm-${esc(p.id)}"></div>
       </div></details>`;
   }).join("");
@@ -501,9 +511,13 @@ function renderHist() {
     const [pid, oid] = c.dataset.liv.split("|");
     const p = hist.find(x => x.id === pid), o = p.orders.find(x => x.id === oid);
     o.livreLe = c.checked ? new Date().toISOString() : null;
+    const bascule = MODE === "enc" ? toutLivre(p) : !toutLivre(p);
     renderHist();
+    if (bascule) flash($("histMsg"), MODE === "enc"
+      ? `Permanence ${p.lieu} du ${dateFR(p.date)} entièrement livrée : elle passe dans l'historique.`
+      : `Permanence ${p.lieu} du ${dateFR(p.date)} remise dans les commandes en cours.`, true);
     const { error } = await sb.rpc("marquer_livre", { pid, oid, livre: c.checked });
-    if (error) { flash($("hm-" + pid), "Non enregistré : " + error.message, false); chargerHist(); }
+    if (error) { flash($("histMsg"), "Non enregistré : " + error.message, false); chargerHist(); }
   });
   box.querySelectorAll("[data-hc]").forEach(b => b.onclick = () => copier(recapTexte(hist.find(p => p.id === b.dataset.hc)), $("hm-" + b.dataset.hc)));
   box.querySelectorAll("[data-hs]").forEach(b => b.onclick = async () => {
@@ -514,7 +528,7 @@ function renderHist() {
     p.discord = true; p.envoyeLe = new Date().toISOString(); renderHist();
   });
   box.querySelectorAll("[data-hd]").forEach(b => b.onclick = async () => {
-    if (!await confirmer("Supprimer cette permanence de l'historique (pour tout le monde) ?")) return;
+    if (!await confirmer("Supprimer définitivement cette permanence (pour tout le monde) ?")) return;
     const { error } = await sb.from("permanences").delete().eq("id", b.dataset.hd);
     if (error) return flash($("hm-" + b.dataset.hd), "Suppression impossible : " + error.message, false);
     hist = hist.filter(p => p.id !== b.dataset.hd); renderHist();

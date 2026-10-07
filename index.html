@@ -29,7 +29,8 @@
   <p class="sub">Registre de permanence d'Intendant</p>
 
   <nav class="tabs">
-    <button type="button" id="tabPerm" class="on">Permanence en cours</button>
+    <button type="button" id="tabPerm" class="on">Prise de commande</button>
+    <button type="button" id="tabEnc">Commandes en cours <span class="badge" id="nbEnc" hidden>0</span></button>
     <button type="button" id="tabHist">Historique</button>
     <button type="button" id="tabCat" hidden>Catalogue</button>
     <button type="button" id="tabReg" hidden>Réglages</button>
@@ -102,15 +103,16 @@
   </div>
   </div>
 
-  <!-- Historique -->
+  <!-- Commandes en cours / Historique (même vue, filtrée sur « tout livré ») -->
   <div id="viewHist" hidden>
+    <p class="hint" id="histIntro" style="margin-top:0"></p>
     <div class="filters">
       <div><label for="fInt">Intendant</label><select id="fInt"><option value="">Tous</option></select></div>
       <div><label for="fLieu">Châtellerie</label><select id="fLieu"><option value="">Toutes</option></select></div>
       <div><label for="fClient">Client</label><input id="fClient" placeholder="Nom du client"></div>
     </div>
+    <div class="msg" id="histMsg" style="margin:0 0 12px"></div>
     <div id="hist"></div>
-    <p class="hint">L'historique est partagé : tous les intendants voient les mêmes permanences.</p>
   </div>
 
   <!-- Catalogue -->
