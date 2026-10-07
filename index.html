@@ -48,6 +48,7 @@
       <div><label for="coffre">Coffre</label><select id="coffre"></select></div>
       <div><label for="date">Date</label><input type="date" id="date"></div>
     </div>
+    <p class="msg err" id="nonLie" hidden style="display:block">Ton compte Discord n'est rattaché à aucun intendant (ton nom Discord est peut-être déjà utilisé par un autre compte) : demande à un administrateur de le faire dans Réglages → Comptes connectés. En attendant, tu ne peux pas clôturer de permanence.</p>
   </div>
 
   <!-- 2. Saisie d'une commande -->
@@ -201,7 +202,9 @@
     </div>
     <div class="card">
       <h2>Comptes connectés</h2>
-      <p class="hint" style="margin-top:0">Les droits viennent des rôles Discord, vérifiés à chaque connexion (valables 7 jours). Pour retirer un accès, retire le rôle sur Discord.</p>
+      <p class="hint" style="margin-top:0">Les droits viennent des rôles Discord, vérifiés à chaque connexion (valables 7 jours). Pour retirer un accès, retire le rôle sur Discord.<br>
+      <b>Rattache chaque intendant à son nom</b> (liste à droite) : il ne pourra prendre commande que pour cet intendant, ses châtelleries et ses coffres, et sera pingé sur Discord quand ses commandes sont livrées.</p>
+      <div class="msg" id="rCptMsg"></div>
       <div id="regComptes"></div>
     </div>
   </div>

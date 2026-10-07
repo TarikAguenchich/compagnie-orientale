@@ -150,9 +150,16 @@ function majPermanence() {
   const selI = $("intendant");
   selI.innerHTML = "";
   if (!REG.intendants.length) selI.add(new Option("— aucun intendant (voir Réglages) —", ""));
-  REG.intendants.forEach(i => selI.add(new Option(i.nom, i.id)));
-  if (!intendantCourant() && REG.intendants.length) state.intendantId = String(REG.intendants[0].id);
+  // Un intendant ne peut prendre commande que pour l'intendant rattaché à son compte Discord
+  const lie = !estAdmin() ? PROFIL?.intendant_id : null;
+  const choix = estAdmin() ? REG.intendants : REG.intendants.filter(i => String(i.id) === String(lie));
+  if (!estAdmin() && ROLE && !choix.length) { selI.innerHTML = ""; selI.add(new Option("— compte non rattaché —", "")); }
+  choix.forEach(i => selI.add(new Option(i.nom, i.id)));
+  if (!estAdmin()) state.intendantId = lie ? String(lie) : "";
+  else if (!intendantCourant() && REG.intendants.length) state.intendantId = String(REG.intendants[0].id);
   selI.value = state.intendantId;
+  selI.disabled = !estAdmin();
+  $("nonLie").hidden = estAdmin() || !ROLE || !!intendantCourant();
   const it = intendantCourant();
   const lieux = REG.chatelleries.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
   const coffres = REG.coffres.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
@@ -378,7 +385,7 @@ function htmlCommandes(orders, actions, permId) {
     <ul>${o.items.map(x => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
     ${permId ? `<div class="row etats" style="margin-top:8px">
-      <label class="liv" title="${o.payeLe ? "Déjà payé : décoche d'abord « Payé »" : "Le modo a donné les items (entre en stock)"}"><input type="checkbox" data-etat="livre|${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""} ${o.payeLe ? "disabled" : ""}> Livré</label>
+      <label class="liv" title="${!estAdmin() ? "Coché par un administrateur quand il te remet les items" : o.payeLe ? "Déjà payé : décoche d'abord « Payé »" : "Items remis à l'intendant (entrent dans son stock) : il sera pingé sur Discord"}"><input type="checkbox" data-etat="livre|${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""} ${o.payeLe || !estAdmin() ? "disabled" : ""}> Livré</label>
       ${o.livreLe ? `<span class="hint">le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>` : ""}
       <label class="liv pay" title="${o.livreLe ? "Remis au client et encaissé (sort du stock)" : "Coche d'abord « Livré »"}"><input type="checkbox" data-etat="paye|${esc(permId)}|${esc(o.id)}" ${o.payeLe ? "checked" : ""} ${o.livreLe ? "" : "disabled"}> Payé</label>
       ${o.payeLe ? `<span class="hint">le ${new Date(o.payeLe).toLocaleString("fr-FR")}</span>` : ""}</div>` : ""}
@@ -435,9 +442,9 @@ const sansIds = orders => orders.map(o => Object.assign({}, o, { items: o.items.
 $("send").onclick = async () => {
   if (!state.orders.length) return flash($("sendMsg"), "Aucune commande dans cette permanence.", false);
   if (!state.date) return flash($("sendMsg"), "Renseigne la date.", false);
-  if (!intendantCourant()) return flash($("sendMsg"), "Choisis l'intendant (à créer dans Réglages s'il n'existe pas).", false);
-  if (!state.lieu) return flash($("sendMsg"), "Choisis la châtellerie (à rattacher à l'intendant dans Réglages).", false);
-  if (!state.coffre) return flash($("sendMsg"), "Choisis le coffre (à rattacher à l'intendant dans Réglages).", false);
+  if (!intendantCourant()) return flash($("sendMsg"), estAdmin() ? "Choisis l'intendant (à créer dans Réglages s'il n'existe pas)." : "Ton compte n'est rattaché à aucun intendant : demande à un administrateur.", false);
+  if (!state.lieu) return flash($("sendMsg"), estAdmin() ? "Choisis la châtellerie (à rattacher à l'intendant dans Réglages)." : "Aucune châtellerie ne t'est attribuée : demande à un administrateur (Réglages → Châtelleries).", false);
+  if (!state.coffre) return flash($("sendMsg"), estAdmin() ? "Choisis le coffre (à rattacher à l'intendant dans Réglages)." : "Aucun coffre ne t'est attribué : demande à un administrateur (Réglages → Coffres).", false);
   if (!await confirmer(`Clôturer la permanence (${state.orders.length} client(s)) et commander aux administrateurs impériaux ?`)) return;
 
   const p = snapshot();
@@ -489,7 +496,9 @@ function renderHist() {
   if ($("viewHist").hidden) return;
   const base = MODE === "enc" ? enCours : hist.filter(toutPaye);
   $("histIntro").textContent = (MODE === "enc"
-    ? "Transmise → Livré (le modo t'a donné les items, ils entrent dans ton stock) → Payé (remis au client, ils sortent du stock). Quand tous les clients ont payé, la permanence passe dans l'historique."
+    ? (estAdmin()
+      ? "Transmise → Livré (tu as remis les items à l'intendant : il est pingé sur Discord, ils entrent dans son stock) → Payé (remis au client par l'intendant). Quand tous les clients ont payé, la permanence passe dans l'historique."
+      : "Transmise → Livré (coché par un administrateur quand il te remet les items, tu es pingé sur Discord) → Payé (à cocher quand tu as remis au client). Quand tous les clients ont payé, la permanence passe dans l'historique.")
     : "Permanences entièrement livrées et payées.") + (estAdmin() ? " Tu vois celles de tous les intendants." : " Tu ne vois que celles que tu as clôturées.");
   const fi = $("fInt").value, fl = $("fLieu").value, fc = $("fClient").value.trim().toLowerCase();
   const list = base.filter(p => (!fi || p.intendant === fi) && (!fl || p.lieu === fl) &&
@@ -817,15 +826,22 @@ function renderStock() {
 /* ---------- Comptes (Réglages, admin) ---------- */
 let COMPTES = [];
 async function chargerComptes() {
-  const { data, error } = await sb.from("profils").select("nom, role, verifie_le, avatar").order("verifie_le", { ascending: false });
+  const { data, error } = await sb.from("profils").select("id, nom, role, verifie_le, avatar, intendant_id").order("verifie_le", { ascending: false });
   if (!error) COMPTES = data;
   if (!$("viewReg").hidden) renderComptes();
 }
 function renderComptes() {
   const libRole = { admin: "Administrateur", intendant: "Intendant" };
   $("regComptes").innerHTML = COMPTES.length ? `<table><tbody>${COMPTES.map(c => `<tr class="reg-row"><td><b>${esc(c.nom || "?")}</b><br>
-    <span class="hint">${c.role ? libRole[c.role] : "Aucun rôle (accès refusé)"} · vérifié le ${c.verifie_le ? new Date(c.verifie_le).toLocaleString("fr-FR") : "—"}</span></td></tr>`).join("")}</tbody></table>`
+    <span class="hint">${c.role ? libRole[c.role] : "Aucun rôle (accès refusé)"} · vérifié le ${c.verifie_le ? new Date(c.verifie_le).toLocaleString("fr-FR") : "—"}</span></td>
+    <td class="reg-lien"><select data-compte="${c.id}" title="Intendant rattaché">${optionsIntendants(c.intendant_id).replace("— aucun —", "— non rattaché —")}</select></td></tr>`).join("")}</tbody></table>`
     : '<p class="empty">Personne ne s\'est encore connecté.</p>';
+  $("regComptes").querySelectorAll("[data-compte]").forEach(sel => sel.onchange = async () => {
+    const { error } = await sb.rpc("lier_compte", { compte: sel.dataset.compte, intendant: sel.value ? Number(sel.value) : null });
+    if (error) return flash($("rCptMsg"), "Non enregistré : " + error.message, false);
+    flash($("rCptMsg"), "Rattachement enregistré.", true);
+    chargerComptes();
+  });
 }
 
 /* ---------- Connexion Discord ---------- */
@@ -863,7 +879,7 @@ async function verifierAcces(session) {
     }
     const [{ data: role }, { data: prof }] = await Promise.all([
       sb.rpc("mon_role"),
-      sb.from("profils").select("nom, avatar, role").eq("id", session.user.id).maybeSingle(),
+      sb.from("profils").select("nom, avatar, role, intendant_id").eq("id", session.user.id).maybeSingle(),
     ]);
     if (!role) return ecranConnexion(prof
       ? `Connecté en tant que ${prof.nom || "?"}, mais sans le rôle Intendant ou Administrateur sur le serveur Discord (ou ta dernière vérification date de plus de 7 jours : reconnecte-toi).`
