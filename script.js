@@ -5,8 +5,7 @@
 const SUPABASE_URL = "https://ipdenjiyngkwweklbdbf.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Lv560D7iNF9V_d35b-EEyA_FzbYF9od";
 
-const WEBHOOK_URL   = "https://discord.com/api/webhooks/1552560280481833070/fM56DVf7LqtqifvuFinmTgpbhDatkxSHwXYWomq1cQKTjneYrGrmPdvSm3YQH8CHhb3b";
-const ROLE_ID_MODOS = "1552559545828642868";   // "" = pas de ping
+// Le webhook Discord et les rôles sont réglés dans Supabase (table « config »), jamais ici.
 const MONNAIE       = "septims";
 
 // Intendants, châtelleries et coffres : page « Réglages » du site (tables Supabase)
@@ -14,7 +13,8 @@ const INSTITUTIONS = ["Thalmor", "Empire", "Académie des Mages"];
 
 /* =========================================================
    Données
-   - catalogue + historique : Supabase (partagés par tout le monde)
+   - catalogue + historique : Supabase (partagés, protégés par la connexion Discord)
+   - intendant : Permanence + Historique ; administrateur : tout
    - permanence en cours (saisie) : ce navigateur, jusqu'à clôture ou « vider »
    ========================================================= */
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -54,12 +54,14 @@ let editId = state.draft?.editId || null;
 let restoring = false;
 
 function statut(t) { $("dbStatus").textContent = t; }
+let ROLE = null, PROFIL = null;
+const estAdmin = () => ROLE === "admin";
 
 /* ---------- Chargement depuis Supabase ---------- */
 async function chargerCatalogue() {
   const tout = [];
   for (let de = 0; ; de += 1000) {                       // Supabase renvoie 1000 lignes max par appel
-    const { data, error } = await sb.from("articles").select("*").order("ordre").order("id").range(de, de + 999);
+    const { data, error } = await sb.from(estAdmin() ? "articles" : "vue_catalogue").select("*").order("ordre").order("id").range(de, de + 999);
     if (error) { statut("⚠ Catalogue non chargé : " + error.message + (CATALOGUE.length ? " (dernière copie affichée)" : "")); return; }
     tout.push(...data);
     if (data.length < 1000) break;
@@ -78,7 +80,7 @@ async function chargerHist() {
   const { data, error } = await sb.from("permanences").select("*").order("cloture_le", { ascending: false }).limit(500);
   if (error) { $("hist").innerHTML = `<p class="empty">Historique indisponible : ${esc(error.message)}</p>`; return; }
   hist = data.map(r => ({ id: r.id, intendant: r.intendant, coffre: r.coffre, lieu: r.lieu, date: r.date, orders: r.orders || [],
-    clotureLe: r.cloture_le, discord: r.discord, envoyeLe: r.envoye_le }));
+    clotureLe: r.cloture_le, cloturePar: r.cloture_par, discord: r.discord, envoyeLe: r.envoye_le }));
   majFiltres();
   if (!$("viewHist").hidden) renderHist();
 }
@@ -96,15 +98,16 @@ async function chargerReglages() {
 // Les autres pages ouvertes se mettent à jour toutes seules
 let tCat = null, tHist = null, tReg = null;
 const majReg = () => { clearTimeout(tReg); tReg = setTimeout(chargerReglages, 400); };
-sb.channel("maj")
+function ecouter() { sb.channel("maj")
   .on("postgres_changes", { event: "*", schema: "public", table: "intendants" }, majReg)
   .on("postgres_changes", { event: "*", schema: "public", table: "chatelleries" }, majReg)
   .on("postgres_changes", { event: "*", schema: "public", table: "coffres" }, majReg)
   .on("postgres_changes", { event: "*", schema: "public", table: "articles" }, () => { clearTimeout(tCat); tCat = setTimeout(chargerCatalogue, 400); })
   .on("postgres_changes", { event: "*", schema: "public", table: "permanences" }, () => { clearTimeout(tHist); tHist = setTimeout(chargerHist, 400); })
-  .subscribe();
+  .on("postgres_changes", { event: "*", schema: "public", table: "profils" }, () => { if (estAdmin()) chargerComptes(); })
+  .subscribe(); }
 // Filet de sécurité : rechargement quand on revient sur l'onglet
-document.addEventListener("visibilitychange", () => { if (!document.hidden) { chargerCatalogue(); chargerHist(); chargerReglages(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && ROLE) { chargerCatalogue(); chargerHist(); chargerReglages(); if (estAdmin()) chargerComptes(); } });
 
 /* ---------- Confirmation dans la page ---------- */
 function confirmer(txt) {
@@ -118,6 +121,7 @@ function confirmer(txt) {
 
 /* ---------- Onglets ---------- */
 function showTab(t) {
+  if (!estAdmin() && (t === "cat" || t === "reg")) t = "perm";
   [["perm", "viewPerm", "tabPerm"], ["hist", "viewHist", "tabHist"], ["cat", "viewCat", "tabCat"], ["reg", "viewReg", "tabReg"]].forEach(([k, v, b]) => {
     $(v).hidden = t !== k; $(b).classList.toggle("on", t === k);
   });
@@ -287,7 +291,7 @@ $("saveOrder").onclick = () => {
   if (absent) return flash($("formMsg"), `« ${absent.nom || "article"} » n'est pas (ou plus) dans le catalogue : retire la ligne.`, false);
   const sansVar = items.find(x => ITEM[x.k].variantes && !x.var);
   if (sansVar) return flash($("formMsg"), `Choisis la variante pour « ${sansVar.nom} ».`, false);
-  const fig = items.map(x => { const a = ITEM[x.k]; return Object.assign(x, { nom: a.nom, prix: a.prix, fourni: a.fourni || "", cat: a.cat, id: (x.var ? a.varIds?.[x.var] : a.id) || "" }); });
+  const fig = items.map(x => { const a = ITEM[x.k]; return Object.assign(x, { nom: a.nom, prix: a.prix, fourni: a.fourni || "", cat: a.cat }); });
   const o = { id: editId || Date.now().toString(36), client, type: $("clientType").value, notes: $("notes").value.trim(), items: fig };
   const edit = !!editId;
   if (edit) state.orders = state.orders.map(x => x.id === editId ? o : x);
@@ -319,7 +323,7 @@ function htmlCommandes(orders, actions, permId) {
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
     <ul>${o.items.map(x => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
-    ${permId ? `<div class="row" style="margin-top:8px"><label class="liv"><input type="checkbox" data-liv="${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""}> Livré</label>
+    ${permId ? `<div class="row" style="margin-top:8px"><label class="liv"><input type="checkbox" data-liv="${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""} ${estAdmin() ? "" : "disabled"}> Livré</label>
       ${o.livreLe ? `<span class="hint">le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>` : ""}</div>` : ""}
     ${actions ? `<div class="row" style="margin-top:8px"><button class="btn small" data-e="${o.id}">Modifier</button><button class="btn small" data-d="${o.id}">Supprimer</button></div>` : ""}
   </div>`).join("");
@@ -353,59 +357,23 @@ function render() {
   $("recap").innerHTML = state.orders.length ? htmlRecap(state.orders, state.coffre || "—") : '<p class="empty">Le récapitulatif apparaîtra ici.</p>';
 }
 
-/* ---------- Discord ---------- */
-function chunks(lines, max) {
-  const out = []; let cur = "";
-  lines.forEach(l => { if (cur && (cur + "\n" + l).length > max) { out.push(cur); cur = l; } else cur = cur ? cur + "\n" + l : l; });
-  if (cur) out.push(cur);
-  return out;
-}
-
+/* ---------- Transmission (la base poste le message Discord) ---------- */
 function recapTexte(p) {
   return `📦 **Commande à l'administration — Permanence ${p.lieu} — ${dateFR(p.date)}** (${p.intendant})
 À déposer dans : **${p.coffre}**
 
-${agreger(p.orders).map(x => `• ${x.qte} × ${x.nom} — ID : ${x.id || "⚠ manquant"}`).join("\n")}
+${agreger(p.orders).map(x => `• ${x.qte} × ${x.nom}` + (estAdmin() ? ` — ID : ${x.id || "⚠ manquant"}` : "")).join("\n")}
 
 Clients : ${p.orders.map(o => o.client).join(", ")}
 Encaissé : ${fmt(totalPerm(p.orders))}`;
-}
-
-async function post(payload) {
-  const r = await fetch(WEBHOOK_URL + "?wait=true", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-  if (!r.ok) throw new Error("Discord a répondu " + r.status);
-}
-
-// Envoie une permanence (lève une erreur si ça échoue) — un seul message, sans détail par client
-async function envoyerDiscord(p) {
-  const ag = agreger(p.orders), nb = ag.reduce((s, x) => s + x.qte, 0);
-  const titre = `Permanence ${p.lieu} — ${dateFR(p.date)}`;
-  const embeds = chunks(ag.map(x => `\`${String(x.qte).padStart(3)}\` × **${x.nom}** — ID : ${x.id ? "`" + x.id + "`" : "⚠ manquant"}`), 3800).map((txt, i) => ({
-    title: i === 0 ? `📦 Commande à l'administration — ${titre}` : "📦 (suite)", description: txt, color: 0x7a1f1a
-  }));
-  embeds[0].fields = [
-    { name: "Intendant", value: p.intendant, inline: true },
-    { name: "Coffre de dépôt", value: p.coffre, inline: true },
-    { name: "Volume", value: `${p.orders.length} client(s) · ${nb} article(s)`, inline: true },
-  ];
-  const sansId = ag.filter(x => !x.id).length;
-  if (sansId) embeds[0].fields.push({ name: "⚠ Attention", value: `${sansId} article(s) sans ID dans le catalogue`, inline: false });
-  embeds[embeds.length - 1].footer = { text: `Encaissé : ${fmt(totalPerm(p.orders))}` };
-  embeds[embeds.length - 1].timestamp = new Date().toISOString();
-  await post({
-    username: "Compagnie de l'Empire Oriental",
-    content: ROLE_ID_MODOS ? `<@&${ROLE_ID_MODOS}> nouvelle commande de permanence` : "Nouvelle commande de permanence",
-    allowed_mentions: { roles: ROLE_ID_MODOS ? [ROLE_ID_MODOS] : [] },
-    embeds: embeds.slice(0, 10)
-  });
 }
 
 function snapshot() {
   return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), intendant: intendantCourant()?.nom || "", coffre: state.coffre, lieu: state.lieu, date: state.date,
            orders: JSON.parse(JSON.stringify(state.orders)), clotureLe: new Date().toISOString(), discord: false };
 }
-const versPerm = p => ({ id: p.id, intendant: p.intendant, coffre: p.coffre, lieu: p.lieu, date: p.date || null, orders: p.orders,
-  cloture_le: p.clotureLe, discord: !!p.discord, envoye_le: p.envoyeLe || null });
+// Les ID de give ne partent jamais du navigateur : la base les retrouve dans le catalogue
+const sansIds = orders => orders.map(o => Object.assign({}, o, { items: o.items.map(({ id, ...x }) => x) }));
 
 $("send").onclick = async () => {
   if (!state.orders.length) return flash($("sendMsg"), "Aucune commande dans cette permanence.", false);
@@ -417,20 +385,14 @@ $("send").onclick = async () => {
 
   const p = snapshot();
   $("send").disabled = true;
-  // 1. archivage (obligatoire : sinon on ne vide rien)
-  const { error } = await sb.from("permanences").insert(versPerm(p));
-  if (error) { $("send").disabled = false; return flash($("sendMsg"), "Impossible d'archiver la permanence (" + error.message + "). Rien n'a été envoyé ni effacé, réessaie.", false); }
-  // 2. envoi Discord
-  let erreur = null;
-  try { await envoyerDiscord(p); p.discord = true; p.envoyeLe = new Date().toISOString(); await sb.from("permanences").update({ discord: true, envoye_le: p.envoyeLe }).eq("id", p.id); }
-  catch (e) { erreur = e.message; }
-  // 3. permanence vidée
+  const { data, error } = await sb.rpc("cloturer_permanence", { p: { id: p.id, intendant: p.intendant, coffre: p.coffre, lieu: p.lieu, date: p.date, orders: sansIds(p.orders) } });
+  $("send").disabled = false;
+  if (error) return flash($("sendMsg"), "Impossible de clôturer (" + error.message + "). Rien n'a été envoyé ni effacé, réessaie.", false);
+  // archivée : on vide la permanence
   state.orders = []; editId = null; state.draft = null; save();
   resetForm(); render(); chargerHist();
-  $("send").disabled = false;
-
-  if (!erreur) flash($("sendMsg"), "Commande transmise aux administrateurs impériaux ✔ Permanence clôturée et archivée dans l'historique.", true);
-  else flash($("sendMsg"), `Permanence clôturée et archivée, mais pas transmise sur Discord (${erreur}). Tu pourras la renvoyer depuis l'onglet Historique.`, false);
+  if (data.discord) flash($("sendMsg"), "Commande transmise aux administrateurs impériaux ✔ Permanence clôturée et archivée dans l'historique.", true);
+  else flash($("sendMsg"), `Permanence clôturée et archivée, mais pas transmise sur Discord (${data.erreur}). Tu pourras la renvoyer depuis l'onglet Historique.`, false);
 };
 
 async function copier(txt, el) {
@@ -478,10 +440,10 @@ function renderHist() {
         <span class="tag ${fini ? "ok" : ""}">${fini ? "✔ Tout livré" : `Livré ${liv}/${p.orders.length}`}</span>
         <span class="total" style="font-size:.9rem">${fmt(totalPerm(p.orders))}</span></summary>
       <div class="body">
-        <div class="hint">Clôturée le ${new Date(p.clotureLe).toLocaleString("fr-FR")}${p.discord && p.envoyeLe ? " — transmise le " + new Date(p.envoyeLe).toLocaleString("fr-FR") : ""}</div>
+        <div class="hint">Clôturée le ${new Date(p.clotureLe).toLocaleString("fr-FR")}${p.cloturePar ? " par " + esc(p.cloturePar) : ""}${p.discord && p.envoyeLe ? " — transmise le " + new Date(p.envoyeLe).toLocaleString("fr-FR") : ""}</div>
         <h3>Commandé à l'administration</h3>${htmlRecap(p.orders, p.coffre)}
         <h3>Commandes détaillées</h3>${htmlCommandes(p.orders, false, p.id)}
-        <div class="row" style="margin-top:8px">${p.discord ? "" : `<button class="btn small primary" data-hs="${esc(p.id)}">Transmettre aux administrateurs</button>`}<button class="btn small" data-hc="${esc(p.id)}">Copier le récap</button><button class="btn small" data-hd="${esc(p.id)}">Supprimer de l'historique</button></div>
+        <div class="row" style="margin-top:8px">${p.discord ? "" : `<button class="btn small primary" data-hs="${esc(p.id)}">Transmettre aux administrateurs</button>`}<button class="btn small" data-hc="${esc(p.id)}">Copier le récap</button>${estAdmin() ? `<button class="btn small" data-hd="${esc(p.id)}">Supprimer de l'historique</button>` : ""}</div>
         <div class="msg" id="hm-${esc(p.id)}"></div>
       </div></details>`;
   }).join("");
@@ -497,15 +459,9 @@ function renderHist() {
   box.querySelectorAll("[data-hs]").forEach(b => b.onclick = async () => {
     const p = hist.find(x => x.id === b.dataset.hs);
     b.disabled = true;
-    try {
-      await envoyerDiscord(p);
-      p.discord = true; p.envoyeLe = new Date().toISOString();
-      await sb.from("permanences").update({ discord: true, envoye_le: p.envoyeLe }).eq("id", p.id);
-      renderHist();
-    } catch (e) {
-      b.disabled = false;
-      flash($("hm-" + p.id), "Échec de l'envoi (" + e.message + ").", false);
-    }
+    const { error } = await sb.rpc("renvoyer_permanence", { pid: p.id });
+    if (error) { b.disabled = false; return flash($("hm-" + p.id), "Échec de l'envoi (" + error.message + ").", false); }
+    p.discord = true; p.envoyeLe = new Date().toISOString(); renderHist();
   });
   box.querySelectorAll("[data-hd]").forEach(b => b.onclick = async () => {
     if (!await confirmer("Supprimer cette permanence de l'historique (pour tout le monde) ?")) return;
@@ -668,6 +624,7 @@ const optionsIntendants = choisi => `<option value="">— aucun —</option>` +
   REG.intendants.map(i => `<option value="${i.id}" ${String(i.id) === String(choisi ?? "") ? "selected" : ""}>${esc(i.nom)}</option>`).join("");
 
 function renderReg() {
+  renderComptes();
   // listes "rattaché à" des formulaires d'ajout
   ["rLieuInt", "rCofInt"].forEach(id => { const g = $(id).value; $(id).innerHTML = optionsIntendants(g || state.intendantId); });
   Object.entries(TABLES).forEach(([table, t]) => {
@@ -721,11 +678,85 @@ Object.entries(TABLES).forEach(([table, t]) => {
   $(t.champ).onkeydown = e => { if (e.key === "Enter") ajouter(); };
 });
 
+/* ---------- Comptes (Réglages, admin) ---------- */
+let COMPTES = [];
+async function chargerComptes() {
+  const { data, error } = await sb.from("profils").select("nom, role, verifie_le, avatar").order("verifie_le", { ascending: false });
+  if (!error) COMPTES = data;
+  if (!$("viewReg").hidden) renderComptes();
+}
+function renderComptes() {
+  const libRole = { admin: "Administrateur", intendant: "Intendant" };
+  $("regComptes").innerHTML = COMPTES.length ? `<table><tbody>${COMPTES.map(c => `<tr class="reg-row"><td><b>${esc(c.nom || "?")}</b><br>
+    <span class="hint">${c.role ? libRole[c.role] : "Aucun rôle (accès refusé)"} · vérifié le ${c.verifie_le ? new Date(c.verifie_le).toLocaleString("fr-FR") : "—"}</span></td></tr>`).join("")}</tbody></table>`
+    : '<p class="empty">Personne ne s\'est encore connecté.</p>';
+}
+
+/* ---------- Connexion Discord ---------- */
+function ecranConnexion(msg, connecte) {
+  $("app").hidden = true; $("login").hidden = false;
+  $("loginMsg").textContent = msg || "";
+  $("loginMsg").hidden = !msg;
+  $("loginBtn").textContent = connecte ? "Se reconnecter avec Discord" : "Se connecter avec Discord";
+  $("loginOut").hidden = !connecte;
+}
+$("loginBtn").onclick = async () => {
+  await sb.auth.signOut();
+  const { error } = await sb.auth.signInWithOAuth({ provider: "discord",
+    options: { scopes: "identify guilds.members.read", redirectTo: location.origin + location.pathname } });
+  if (error) ecranConnexion("Connexion impossible : " + error.message, false);
+};
+const deconnexion = async () => {
+  try { ["catalogue_cache", "reglages_cache"].forEach(k => localStorage.removeItem(k)); sessionStorage.removeItem("sync"); } catch {}
+  await sb.auth.signOut(); location.reload();
+};
+$("loginOut").onclick = deconnexion;
+$("logout").onclick = deconnexion;
+
+let enCours = false, demarre = false;
+async function verifierAcces(session) {
+  if (enCours) return; enCours = true;
+  try {
+    if (!session) return ecranConnexion("", false);
+    // Juste après la connexion, Supabase fournit le jeton Discord : la base vérifie les rôles sur le serveur
+    const marque = session.provider_token ? session.provider_token.slice(-16) : null;
+    if (marque && sessionStorage.getItem("sync") !== marque) {
+      const { error } = await sb.rpc("synchroniser_role", { jeton: session.provider_token });
+      if (error) return ecranConnexion("Vérification Discord impossible : " + error.message, true);
+      try { sessionStorage.setItem("sync", marque); } catch {}
+    }
+    const [{ data: role }, { data: prof }] = await Promise.all([
+      sb.rpc("mon_role"),
+      sb.from("profils").select("nom, avatar, role").eq("id", session.user.id).maybeSingle(),
+    ]);
+    if (!role) return ecranConnexion(prof
+      ? `Connecté en tant que ${prof.nom || "?"}, mais sans le rôle Intendant ou Administrateur sur le serveur Discord (ou ta dernière vérification date de plus de 7 jours : reconnecte-toi).`
+      : "Reconnecte-toi avec Discord pour vérifier tes rôles.", true);
+    ROLE = role; PROFIL = prof;
+    demarrer();
+  } finally { enCours = false; }
+}
+sb.auth.onAuthStateChange((ev, session) => {
+  if (ev === "INITIAL_SESSION" || ev === "SIGNED_IN") setTimeout(() => verifierAcces(session), 0);
+  if (ev === "SIGNED_OUT") ecranConnexion("", false);
+});
+
+function demarrer() {
+  $("login").hidden = true; $("app").hidden = false;
+  $("userName").textContent = PROFIL?.nom || "";
+  $("userRole").textContent = estAdmin() ? "Administrateur" : "Intendant";
+  if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
+  $("tabCat").hidden = $("tabReg").hidden = !estAdmin();
+  if (demarre) return; demarre = true;
+  majPermanence(); majFiltres();
+  chargerForm(state.draft);
+  render();
+  let t0 = "perm"; try { t0 = sessionStorage.getItem("tab") || "perm"; } catch {}
+  showTab(t0);
+  ecouter();
+  chargerReglages(); chargerCatalogue(); chargerHist();
+  if (estAdmin()) chargerComptes();
+}
+
 /* ---------- Démarrage ---------- */
-majPermanence(); majFiltres();
-chargerForm(state.draft);
-render();
-let t0 = "perm"; try { t0 = sessionStorage.getItem("tab") || "perm"; } catch {}
-showTab(t0);
-if (SUPABASE_URL.includes("XXXXXXXX")) statut("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.");
-else { chargerReglages(); chargerCatalogue(); chargerHist(); }
+if (SUPABASE_URL.includes("XXXXXXXX")) ecranConnexion("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.", false);
