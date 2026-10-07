@@ -195,6 +195,7 @@ function rafraichirLignes() {
   document.querySelectorAll("#lines tbody tr").forEach(tr => {
     const sel = tr.querySelector(".item"), v = tr.querySelector(".var").value;
     remplirSelect(sel, cle({ k: sel.value, nom: sel.dataset.nom }), sel.dataset.nom); majVariante(tr, v);
+    tr._majTexte?.();
   });
   restoring = false;
 }
@@ -202,7 +203,8 @@ function rafraichirLignes() {
 function ajouterLigne(x) {
   x = x || {};
   const tr = document.createElement("tr");
-  tr.innerHTML = `<td><select class="item"></select><select class="var" hidden style="margin-top:6px"></select></td>
+  tr.innerHTML = `<td><div class="combo"><input class="search" placeholder="Rechercher un article…" autocomplete="off" spellcheck="false"><div class="combo-list" hidden></div></div>
+    <select class="item" hidden></select><select class="var" hidden style="margin-top:6px"></select></td>
     <td class="qty"><input type="number" class="q" min="1" value="${x.qte || 1}"></td>
     <td class="cost"></td>
     <td class="del"><button type="button" class="x" title="Retirer">×</button></td>`;
@@ -212,8 +214,56 @@ function ajouterLigne(x) {
   tr.querySelector(".x").onclick = () => { tr.remove(); if (!$("lines").tBodies[0].children.length) ajouterLigne(); calcForm(); };
   tr.querySelector(".item").onchange = e => { e.target.dataset.nom = ITEM[e.target.value]?.nom || ""; majVariante(tr); calcForm(); };
   tr.querySelector(".q").oninput = calcForm;
+  comboArticle(tr);
   $("lines").tBodies[0].append(tr);
   calcForm();
+}
+
+/* ---------- Recherche d'article (remplace la longue liste déroulante) ---------- */
+const sansAccent = s => String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function comboArticle(tr) {
+  const sel = tr.querySelector(".item"), inp = tr.querySelector(".search"), list = tr.querySelector(".combo-list");
+  let res = [], idx = -1;
+  const majTexte = () => { inp.value = ITEM[sel.value]?.nom || (sel.value ? sel.dataset.nom || "" : ""); inp.classList.toggle("absent", !!sel.value && !ITEM[sel.value]); };
+  tr._majTexte = majTexte;
+  majTexte();
+
+  function afficher(q) {
+    const mots = sansAccent(q.trim()).split(/\s+/).filter(Boolean);
+    res = CATALOGUE.filter(a => { const t = sansAccent(a.nom + " " + a.cat); return mots.every(m => t.includes(m)); });
+    idx = res.length ? 0 : -1;
+    let cur = null, html = "";
+    res.forEach((a, i) => {
+      if (a.cat !== cur) { html += `<div class="combo-cat">${esc(a.cat)}</div>`; cur = a.cat; }
+      html += `<div class="combo-opt${i === idx ? " on" : ""}" data-i="${i}"><span>${esc(a.nom)}</span><span class="hint">${fmt(a.prix)}${a.variantes ? " · " + a.variantes.length + " variantes" : ""}</span></div>`;
+    });
+    list.innerHTML = html || `<div class="combo-vide">${CATALOGUE.length ? "Aucun article ne correspond." : "Chargement du catalogue…"}</div>`;
+    list.hidden = false;
+  }
+  function surligner(n) {
+    if (!res.length) return;
+    idx = (n + res.length) % res.length;
+    list.querySelectorAll(".combo-opt").forEach(o => o.classList.toggle("on", +o.dataset.i === idx));
+    list.querySelector(".combo-opt.on")?.scrollIntoView({ block: "nearest" });
+  }
+  function choisir(a) {
+    sel.value = a.k; sel.dataset.nom = a.nom;
+    list.hidden = true; majTexte();
+    sel.dispatchEvent(new Event("change"));
+    const v = tr.querySelector(".var");
+    (v.hidden ? tr.querySelector(".q") : v).focus();
+  }
+  inp.onfocus = () => { inp.select(); afficher(""); };
+  inp.oninput = () => afficher(inp.value);
+  inp.onkeydown = e => {
+    if (e.key === "ArrowDown") { e.preventDefault(); if (list.hidden) afficher(inp.value); else surligner(idx + 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); surligner(idx - 1); }
+    else if (e.key === "Enter") { e.preventDefault(); if (!list.hidden && res[idx]) choisir(res[idx]); }
+    else if (e.key === "Escape") { list.hidden = true; majTexte(); }
+  };
+  inp.onblur = () => setTimeout(() => { list.hidden = true; majTexte(); }, 150);
+  list.onmousedown = e => e.preventDefault();          // garde le focus dans le champ
+  list.onclick = e => { const o = e.target.closest(".combo-opt"); if (o) choisir(res[+o.dataset.i]); };
 }
 $("addLine").onclick = () => ajouterLigne();
 
@@ -476,13 +526,36 @@ let catEdit = null;   // clé de l'article en cours de modification
 
 function resetCatForm() {
   catEdit = null;
-  ["cCat", "cNom", "cPrix", "cId", "cFourni", "cVar", "cNote"].forEach(id => $(id).value = "");
+  ["cCat", "cNom", "cPrix", "cId", "cFourni", "cNote"].forEach(id => $(id).value = "");
+  $("cVars").innerHTML = ""; majChampId();
   $("catFormTitle").textContent = "Ajouter un article";
   $("cSave").textContent = "Ajouter au catalogue";
   $("cCancel").style.display = "none";
   $("catFormCard").classList.remove("editing");
 }
 $("cCancel").onclick = resetCatForm;
+
+// Éditeur de variantes du formulaire catalogue
+function ajouterVariante(nom, id) {
+  const d = document.createElement("div");
+  d.className = "var-ligne";
+  d.innerHTML = `<input class="v-nom" placeholder="Nom (ex. Blanc)" autocomplete="off"><input class="v-id mono" placeholder="ID (facultatif)" autocomplete="off">
+    <button type="button" class="x" title="Retirer cette variante">×</button>`;
+  d.querySelector(".v-nom").value = nom || ""; d.querySelector(".v-id").value = id || "";
+  d.querySelector(".x").onclick = () => { d.remove(); majChampId(); };
+  d.querySelector(".v-nom").oninput = majChampId;
+  $("cVars").append(d);
+  majChampId();
+  return d;
+}
+const lignesVariantes = () => [...document.querySelectorAll("#cVars .var-ligne")].map(d => ({ nom: d.querySelector(".v-nom").value.trim(), id: d.querySelector(".v-id").value.trim() }));
+// Avec des variantes, l'ID se met sur chaque variante : le champ ID général est désactivé
+function majChampId() {
+  const avec = lignesVariantes().some(l => l.nom);
+  $("cId").disabled = avec;
+  $("cId").placeholder = avec ? "ID par variante, ci-dessous" : "ex. 0001396B";
+}
+$("cVarAdd").onclick = () => ajouterVariante().querySelector(".v-nom").focus();
 
 // Ordre d'un nouvel article : juste après le dernier de sa catégorie (ou à la fin)
 function ordreApres(cat, sauf) {
@@ -503,16 +576,15 @@ $("cSave").onclick = async () => {
   if (prixTxt === "" || !Number.isFinite(prix) || prix < 0) return flash($("cMsg"), "Renseigne un prix valide.", false);
   if (CATALOGUE.some(x => x.cat === cat && x.nom === nom && x.k !== catEdit)) return flash($("cMsg"), `« ${nom} » existe déjà dans cette catégorie.`, false);
   const a = { cat, nom, fourni: $("cFourni").value.trim(), prix: Math.round(prix), note: $("cNote").value.trim(), id: $("cId").value.trim() };
-  // "Blanc = 0A1B2C, Bleu" -> variantes + varIds
+  // Variantes : une ligne = un nom + son ID (facultatif)
   const ancien = catEdit ? ITEM[catEdit] : null;
   const vars = [], varIds = {};
-  $("cVar").value.split(",").map(x => x.trim()).filter(Boolean).forEach(v => {
-    const [n, ...r] = v.split("="); const nomV = n.trim(), idV = r.join("=").trim();
-    if (!nomV || vars.includes(nomV)) return;
-    vars.push(nomV);
-    const garde = idV || ancien?.varIds?.[nomV] || "";
-    if (garde) varIds[nomV] = garde;
-  });
+  for (const l of lignesVariantes()) {
+    if (!l.nom) { if (l.id) return flash($("cMsg"), `Donne un nom à la variante qui a l'ID ${l.id}.`, false); continue; }
+    if (vars.includes(l.nom)) return flash($("cMsg"), `La variante « ${l.nom} » est en double.`, false);
+    vars.push(l.nom);
+    if (l.id) varIds[l.nom] = l.id;
+  }
   if (vars.length) { a.variantes = vars; a.varIds = varIds; }
 
   const ligne = versLigne(a);
@@ -560,7 +632,7 @@ function renderCat() {
     $("cCat").value = a.cat; $("cNom").value = a.nom; $("cPrix").value = a.prix;
     $("cId").value = a.id || "";
     $("cFourni").value = a.fourni || ""; $("cNote").value = a.note || "";
-    $("cVar").value = (a.variantes || []).map(v => a.varIds?.[v] ? `${v} = ${a.varIds[v]}` : v).join(", ");
+    $("cVars").innerHTML = ""; (a.variantes || []).forEach(v => ajouterVariante(v, a.varIds?.[v] || "")); majChampId();
     $("catFormTitle").textContent = "Modifier « " + a.nom + " »";
     $("cSave").textContent = "Enregistrer la modification";
     $("cCancel").style.display = "";

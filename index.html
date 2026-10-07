@@ -127,9 +127,10 @@
         <div><label for="cFourni">À fournir par le client <span class="hint">(facultatif)</span></label><input id="cFourni" placeholder="ex. Casque d'acier"></div>
         <div><label for="cNote">Avertissement <span class="hint">(facultatif)</span></label><input id="cNote" placeholder="ex. Max 4 par semaine"></div>
       </div>
-      <div style="margin-top:12px">
-        <label for="cVar">Variantes <span class="hint">(facultatif, séparées par des virgules — chaque variante peut avoir son ID : <code>Blanc = 0A1B2C, Bleu = 0A1B2D</code>)</span></label>
-        <input id="cVar" placeholder="ex. Blanc = 0A1B2C, Bleu = 0A1B2D, Violet">
+      <div class="var-box" style="margin-top:12px">
+        <label>Variantes <span class="hint">(facultatif — couleurs, modèles… L'intendant devra en choisir une. Sans variante, il ne voit rien de plus.)</span></label>
+        <div id="cVars"></div>
+        <button type="button" class="btn small" id="cVarAdd">+ Ajouter une variante</button>
       </div>
       <div class="row" style="margin-top:12px">
         <button type="button" class="btn primary" id="cSave">Ajouter au catalogue</button>
