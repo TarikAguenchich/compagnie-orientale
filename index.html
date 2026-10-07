@@ -32,6 +32,7 @@
     <button type="button" id="tabPerm" class="on">Prise de commande</button>
     <button type="button" id="tabEnc">Commandes en cours <span class="badge" id="nbEnc" hidden>0</span></button>
     <button type="button" id="tabHist">Historique</button>
+    <button type="button" id="tabStock">Stock</button>
     <button type="button" id="tabCat" hidden>Catalogue</button>
     <button type="button" id="tabReg" hidden>Réglages</button>
   </nav>
@@ -113,6 +114,20 @@
     </div>
     <div class="msg" id="histMsg" style="margin:0 0 12px"></div>
     <div id="hist"></div>
+  </div>
+
+  <!-- Stock : livré mais pas encore payé -->
+  <div id="viewStock" hidden>
+    <p class="hint" style="margin-top:0">Articles livrés par l'administration et pas encore remis au client (« Payé » non coché).</p>
+    <div class="filters filters4">
+      <div id="sIntWrap"><label for="sInt">Intendant</label><select id="sInt"><option value="">Tous</option></select></div>
+      <div><label for="sLieu">Châtellerie</label><select id="sLieu"><option value="">Toutes</option></select></div>
+      <div><label for="sClient">Client</label><input id="sClient" placeholder="Rechercher un client"></div>
+      <div><label for="sItem">Article</label><input id="sItem" placeholder="Rechercher un article"></div>
+    </div>
+    <div class="msg" id="stockMsg" style="margin:0 0 12px"></div>
+    <div class="card"><h2>En stock <span class="badge" id="stockNb">0</span></h2><div id="stockTotal"></div></div>
+    <div class="card"><h2>Détail par châtellerie et client</h2><div id="stockDetail"></div></div>
   </div>
 
   <!-- Catalogue -->

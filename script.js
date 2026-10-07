@@ -82,7 +82,7 @@ async function chargerHist() {
   hist = data.map(r => ({ id: r.id, intendant: r.intendant, coffre: r.coffre, lieu: r.lieu, date: r.date, orders: r.orders || [],
     clotureLe: r.cloture_le, cloturePar: r.cloture_par, discord: r.discord, envoyeLe: r.envoye_le }));
   majFiltres();
-  renderHist();
+  renderHist(); renderStock();
 }
 
 async function chargerReglages() {
@@ -123,9 +123,10 @@ function confirmer(txt) {
 let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
   if (!estAdmin() && (t === "cat" || t === "reg")) t = "perm";
-  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", cat: "viewCat", reg: "viewReg" };
-  ["viewPerm", "viewHist", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
-  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
+  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", cat: "viewCat", reg: "viewReg" };
+  ["viewPerm", "viewHist", "viewStock", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
+  if (t === "stock") renderStock();
+  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
   if (t === "cat") renderCat();
   if (t === "reg") renderReg();
@@ -134,6 +135,7 @@ function showTab(t) {
 $("tabPerm").onclick = () => showTab("perm");
 $("tabHist").onclick = () => showTab("hist");
 $("tabEnc").onclick = () => showTab("enc");
+$("tabStock").onclick = () => showTab("stock");
 $("tabCat").onclick = () => showTab("cat");
 $("tabReg").onclick = () => showTab("reg");
 
@@ -370,13 +372,16 @@ function agreger(orders) {
 
 /* ---------- Rendu (partagé avec l'historique) ---------- */
 function htmlCommandes(orders, actions, permId) {
-  return orders.map((o, i) => `<div class="order${permId && o.livreLe ? " livree" : ""}">
+  return orders.map((o, i) => `<div class="order${permId ? (o.payeLe ? " payee" : o.livreLe ? " livree" : "") : ""}">
     <div class="order-head"><b>${i + 1}. ${esc(o.client)}</b><span class="hint">${esc(o.type)}</span>
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
     <ul>${o.items.map(x => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
-    ${permId ? `<div class="row" style="margin-top:8px"><label class="liv"><input type="checkbox" data-liv="${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""}> Livré</label>
-      ${o.livreLe ? `<span class="hint">le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>` : ""}</div>` : ""}
+    ${permId ? `<div class="row etats" style="margin-top:8px">
+      <label class="liv" title="${o.payeLe ? "Déjà payé : décoche d'abord « Payé »" : "Le modo a donné les items (entre en stock)"}"><input type="checkbox" data-etat="livre|${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""} ${o.payeLe ? "disabled" : ""}> Livré</label>
+      ${o.livreLe ? `<span class="hint">le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>` : ""}
+      <label class="liv pay" title="${o.livreLe ? "Remis au client et encaissé (sort du stock)" : "Coche d'abord « Livré »"}"><input type="checkbox" data-etat="paye|${esc(permId)}|${esc(o.id)}" ${o.payeLe ? "checked" : ""} ${o.livreLe ? "" : "disabled"}> Payé</label>
+      ${o.payeLe ? `<span class="hint">le ${new Date(o.payeLe).toLocaleString("fr-FR")}</span>` : ""}</div>` : ""}
     ${actions ? `<div class="row" style="margin-top:8px"><button class="btn small" data-e="${o.id}">Modifier</button><button class="btn small" data-d="${o.id}">Supprimer</button></div>` : ""}
   </div>`).join("");
 }
@@ -466,7 +471,9 @@ $("reset").onclick = async () => {
 // Filtres : intendants / châtelleries actuels + ceux présents dans l'historique
 function majFiltres() {
   [["fInt", REG.intendants.map(i => i.nom), hist.map(p => p.intendant), "Tous"],
-   ["fLieu", REG.chatelleries.map(c => c.nom), hist.map(p => p.lieu), "Toutes"]].forEach(([id, a, b, tous]) => {
+   ["fLieu", REG.chatelleries.map(c => c.nom), hist.map(p => p.lieu), "Toutes"],
+   ["sInt", REG.intendants.map(i => i.nom), hist.map(p => p.intendant), "Tous"],
+   ["sLieu", estAdmin() ? REG.chatelleries.map(c => c.nom) : [], hist.map(p => p.lieu), "Toutes"]].forEach(([id, a, b, tous]) => {
     const sel = $(id), garde = sel.value;
     sel.innerHTML = `<option value="">${tous}</option>`;
     [...new Set([...a, ...b].filter(Boolean))].sort((x, y) => x.localeCompare(y, "fr")).forEach(n => sel.add(new Option(n, n)));
@@ -475,29 +482,30 @@ function majFiltres() {
 }
 $("fInt").onchange = $("fLieu").onchange = $("fClient").oninput = renderHist;
 
-const toutLivre = p => p.orders.length > 0 && p.orders.every(o => o.livreLe);
+const toutPaye = p => p.orders.length > 0 && p.orders.every(o => o.payeLe);
 function renderHist() {
-  const enCours = hist.filter(p => !toutLivre(p));
+  const enCours = hist.filter(p => !toutPaye(p));
   $("nbEnc").textContent = enCours.length; $("nbEnc").hidden = !enCours.length;
   if ($("viewHist").hidden) return;
-  const base = MODE === "enc" ? enCours : hist.filter(toutLivre);
+  const base = MODE === "enc" ? enCours : hist.filter(toutPaye);
   $("histIntro").textContent = (MODE === "enc"
-    ? "Permanences transmises dont tout n'est pas encore livré. Coche « Livré » pour chaque client : quand tout est livré, la permanence passe dans l'historique."
-    : "Permanences entièrement livrées.") + (estAdmin() ? " Tu vois celles de tous les intendants." : " Tu ne vois que celles que tu as clôturées.");
+    ? "Transmise → Livré (le modo t'a donné les items, ils entrent dans ton stock) → Payé (remis au client, ils sortent du stock). Quand tous les clients ont payé, la permanence passe dans l'historique."
+    : "Permanences entièrement livrées et payées.") + (estAdmin() ? " Tu vois celles de tous les intendants." : " Tu ne vois que celles que tu as clôturées.");
   const fi = $("fInt").value, fl = $("fLieu").value, fc = $("fClient").value.trim().toLowerCase();
   const list = base.filter(p => (!fi || p.intendant === fi) && (!fl || p.lieu === fl) &&
     (!fc || p.orders.some(o => o.client.toLowerCase().includes(fc))));
   const box = $("hist");
-  if (!base.length) { box.innerHTML = `<p class="empty">${MODE === "enc" ? "Aucune commande en cours : tout a été livré." : "Aucune permanence entièrement livrée pour l'instant."}</p>`; return; }
+  if (!base.length) { box.innerHTML = `<p class="empty">${MODE === "enc" ? "Aucune commande en cours : tout a été payé." : "Aucune permanence entièrement payée pour l'instant."}</p>`; return; }
   if (!list.length) { box.innerHTML = '<p class="empty">Aucune permanence ne correspond aux filtres.</p>'; return; }
   const ouverts = new Set([...box.querySelectorAll("details[open]")].map(d => d.dataset.id));
   box.innerHTML = list.map(p => {
     const nb = p.orders.reduce((s, o) => s + o.items.reduce((t, x) => t + x.qte, 0), 0);
-    const liv = p.orders.filter(o => o.livreLe).length, fini = liv === p.orders.length;
-    return `<details class="perm ${fini ? "done" : "pending"}" data-id="${esc(p.id)}" ${ouverts.has(p.id) ? "open" : ""}>
+    const liv = p.orders.filter(o => o.livreLe).length, pay = p.orders.filter(o => o.payeLe).length, n = p.orders.length;
+    const fini = pay === n, etat = fini ? "done" : liv ? "partiel" : "pending";
+    return `<details class="perm ${etat}" data-id="${esc(p.id)}" ${ouverts.has(p.id) ? "open" : ""}>
       <summary><b>${esc(p.lieu)} — ${dateFR(p.date)}</b><span class="hint">${esc(p.intendant)} · ${p.orders.length} client(s) · ${nb} article(s)</span>
         ${p.discord ? '<span class="tag ok">Transmise</span>' : '<span class="tag err">Non transmise</span>'}
-        <span class="tag ${fini ? "ok" : ""}">${fini ? "✔ Tout livré" : `Livré ${liv}/${p.orders.length}`}</span>
+        ${fini ? '<span class="tag ok">✔ Tout payé</span>' : `<span class="tag ${liv ? "orange" : ""}">Livré ${liv}/${n}</span><span class="tag ${pay ? "ok" : ""}">Payé ${pay}/${n}</span>`}
         <span class="total" style="font-size:.9rem">${fmt(totalPerm(p.orders))}</span></summary>
       <div class="body">
         <div class="hint">Clôturée le ${new Date(p.clotureLe).toLocaleString("fr-FR")}${p.cloturePar ? " par " + esc(p.cloturePar) : ""}${p.discord && p.envoyeLe ? " — transmise le " + new Date(p.envoyeLe).toLocaleString("fr-FR") : ""}</div>
@@ -507,18 +515,7 @@ function renderHist() {
         <div class="msg" id="hm-${esc(p.id)}"></div>
       </div></details>`;
   }).join("");
-  box.querySelectorAll("[data-liv]").forEach(c => c.onchange = async () => {
-    const [pid, oid] = c.dataset.liv.split("|");
-    const p = hist.find(x => x.id === pid), o = p.orders.find(x => x.id === oid);
-    o.livreLe = c.checked ? new Date().toISOString() : null;
-    const bascule = MODE === "enc" ? toutLivre(p) : !toutLivre(p);
-    renderHist();
-    if (bascule) flash($("histMsg"), MODE === "enc"
-      ? `Permanence ${p.lieu} du ${dateFR(p.date)} entièrement livrée : elle passe dans l'historique.`
-      : `Permanence ${p.lieu} du ${dateFR(p.date)} remise dans les commandes en cours.`, true);
-    const { error } = await sb.rpc("marquer_livre", { pid, oid, livre: c.checked });
-    if (error) { flash($("histMsg"), "Non enregistré : " + error.message, false); chargerHist(); }
-  });
+  box.querySelectorAll("[data-etat]").forEach(c => c.onchange = () => changerEtat(c));
   box.querySelectorAll("[data-hc]").forEach(b => b.onclick = () => copier(recapTexte(hist.find(p => p.id === b.dataset.hc)), $("hm-" + b.dataset.hc)));
   box.querySelectorAll("[data-hs]").forEach(b => b.onclick = async () => {
     const p = hist.find(x => x.id === b.dataset.hs);
@@ -764,6 +761,59 @@ Object.entries(TABLES).forEach(([table, t]) => {
   $(t.champ).onkeydown = e => { if (e.key === "Enter") ajouter(); };
 });
 
+/* ---------- États Livré / Payé (règles vérifiées aussi par la base) ---------- */
+async function changerEtat(c) {
+  const [etat, pid, oid] = c.dataset.etat.split("|");
+  const p = hist.find(x => x.id === pid), o = p?.orders.find(x => x.id === oid);
+  if (!o) return;
+  const val = c.checked, champ = etat === "paye" ? "payeLe" : "livreLe";
+  const avant = toutPaye(p), dansHist = !!c.closest("#viewHist"), msg = $(dansHist ? "histMsg" : "stockMsg");
+  o[champ] = val ? new Date().toISOString() : null;
+  renderHist(); renderStock();
+  if (avant !== toutPaye(p) && dansHist) flash(msg, avant
+    ? `Permanence ${p.lieu} du ${dateFR(p.date)} remise dans les commandes en cours.`
+    : `Permanence ${p.lieu} du ${dateFR(p.date)} entièrement payée : elle passe dans l'historique.`, true);
+  const { error } = await sb.rpc(etat === "paye" ? "marquer_paye" : "marquer_livre", { pid, oid, [etat === "paye" ? "paye" : "livre"]: val });
+  if (error) { flash(msg, "Non enregistré : " + error.message, false); chargerHist(); }
+}
+
+/* ---------- Stock : livré par l'administration, pas encore payé par le client ---------- */
+function renderStock() {
+  if ($("viewStock").hidden) return;
+  const fi = $("sInt").value, fl = $("sLieu").value;
+  const fc = sansAccent($("sClient").value.trim()), fa = sansAccent($("sItem").value.trim());
+  const lignes = [];
+  hist.forEach(p => p.orders.forEach(o => {
+    if (!o.livreLe || o.payeLe) return;
+    if ((fi && p.intendant !== fi) || (fl && p.lieu !== fl) || (fc && !sansAccent(o.client).includes(fc))) return;
+    const items = o.items.filter(x => !fa || sansAccent(lib(x)).includes(fa));
+    if (items.length) lignes.push({ p, o, items });
+  }));
+  // total par article
+  const tot = new Map();
+  lignes.forEach(l => l.items.forEach(x => { const k = lib(x); tot.set(k, (tot.get(k) || 0) + x.qte); }));
+  const triee = [...tot].sort((a, b) => a[0].localeCompare(b[0], "fr"));
+  $("stockNb").textContent = triee.reduce((s, [, q]) => s + q, 0);
+  $("stockTotal").innerHTML = triee.length
+    ? `<table><thead><tr><th style="text-align:right">Qté</th><th>Article</th></tr></thead><tbody>${triee.map(([k, q]) => `<tr><td class="n">${q}</td><td>${esc(k)}</td></tr>`).join("")}</tbody></table>`
+    : '<p class="empty">Rien en stock.</p>';
+  // détail par châtellerie puis client
+  lignes.sort((a, b) => a.p.lieu.localeCompare(b.p.lieu, "fr") || a.o.client.localeCompare(b.o.client, "fr"));
+  let cur = null, html = "";
+  lignes.forEach(({ p, o, items }) => {
+    if (p.lieu !== cur) { html += `<h3 class="stock-lieu">${esc(p.lieu || "—")}</h3>`; cur = p.lieu; }
+    html += `<div class="order livree"><div class="order-head"><b>${esc(o.client)}</b><span class="hint">${esc(o.type || "")} · permanence du ${dateFR(p.date)} · ${esc(p.intendant)}</span>
+      <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
+      <ul>${items.map(x => `<li>${x.qte} × ${esc(lib(x))}</li>`).join("")}</ul>
+      <div class="row etats" style="margin-top:6px"><span class="hint">Livré le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>
+      <label class="liv pay"><input type="checkbox" data-etat="paye|${esc(p.id)}|${esc(o.id)}"> Payé (remis au client)</label></div></div>`;
+  });
+  $("stockDetail").innerHTML = html || '<p class="empty">Aucun article en stock pour ces filtres.</p>';
+  $("stockDetail").querySelectorAll("[data-etat]").forEach(c => c.onchange = () => changerEtat(c));
+}
+["sInt", "sLieu"].forEach(id => $(id).onchange = renderStock);
+["sClient", "sItem"].forEach(id => $(id).oninput = renderStock);
+
 /* ---------- Comptes (Réglages, admin) ---------- */
 let COMPTES = [];
 async function chargerComptes() {
@@ -833,6 +883,7 @@ function demarrer() {
   $("userRole").textContent = estAdmin() ? "Administrateur" : "Intendant";
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
   $("tabCat").hidden = $("tabReg").hidden = !estAdmin();
+  $("sIntWrap").hidden = !estAdmin();
   if (demarre) return; demarre = true;
   majPermanence(); majFiltres();
   chargerForm(state.draft);
