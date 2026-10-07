@@ -18,6 +18,7 @@
     <button type="button" id="tabHist">Historique</button>
     <button type="button" id="tabCat">Catalogue</button>
   </nav>
+  <p class="hint" id="dbStatus" style="margin:-8px 0 14px"></p>
 
   <div id="viewPerm">
   <!-- 1. Permanence -->
@@ -76,7 +77,7 @@
     <h2>À commander à l'administration de la Compagnie pour cette permanence</h2>
     <div id="recap"><p class="empty">Le récapitulatif apparaîtra ici.</p></div>
     <div class="row" style="margin-top:14px">
-      <button type="button" class="btn primary" id="send">Clôturer et envoyer sur Discord</button>
+      <button type="button" class="btn primary" id="send">Commander aux administrateurs impériaux</button>
       <button type="button" class="btn" id="copy">Copier le récap</button>
       <button type="button" class="btn" id="reset" style="margin-left:auto">Vider la permanence</button>
     </div>
@@ -92,7 +93,7 @@
       <div><label for="fClient">Client</label><input id="fClient" placeholder="Nom du client"></div>
     </div>
     <div id="hist"></div>
-    <p class="hint">L'historique est conservé dans ce navigateur (appareil de l'intendant).</p>
+    <p class="hint">L'historique est partagé : tous les intendants voient les mêmes permanences.</p>
   </div>
 
   <!-- Catalogue -->
@@ -127,20 +128,17 @@
         <label class="liv"><input type="checkbox" id="cMissing"> Seulement les articles sans ID</label>
         <span class="hint" id="nbMissing"></span>
       </div>
-      <p class="hint" style="margin-top:0">Les ID se modifient directement dans la colonne « ID item ».</p>
+      <p class="hint" style="margin-top:0">Les ID se modifient directement dans la colonne « ID item » : ils sont enregistrés pour tout le monde dès que tu quittes la case.</p>
+      <div class="msg" id="cIdMsg"></div>
       <div id="catTable"></div>
     </div>
 
     <div class="card">
       <h2>Sauvegarde du catalogue</h2>
-      <p class="hint" style="margin-top:0">Les modifications sont enregistrées dans ce navigateur. Pour que tous les intendants aient le même catalogue, utilise « Copier pour script.js » et remplace le bloc <code>CATALOGUE_DEFAUT</code> dans <code>script.js</code>.</p>
+      <p class="hint" style="margin-top:0">Le catalogue est enregistré en ligne et partagé par tous les intendants. Tu peux en télécharger une copie de secours.</p>
       <div class="row">
         <button type="button" class="btn" id="cExport">Exporter (.json)</button>
-        <label class="btn" style="margin:0">Importer (.json)<input type="file" id="cImport" accept=".json,application/json" hidden></label>
-        <button type="button" class="btn" id="cCopyJs">Copier pour script.js</button>
-        <button type="button" class="btn" id="cReset" style="margin-left:auto">Revenir au catalogue d'origine</button>
       </div>
-      <div class="msg" id="cSaveMsg"></div>
     </div>
   </div>
 </div>
@@ -149,6 +147,7 @@
 <div id="modal" hidden><div class="modal-box"><p id="modalTxt"></p>
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="script.js"></script>
 </body>
 </html>

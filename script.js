@@ -1,6 +1,10 @@
 /* =========================================================
    CONFIG
    ========================================================= */
+// Supabase > Project Settings > API (ou Data API)
+const SUPABASE_URL = "https://ipdenjiyngkwweklbdbf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Lv560D7iNF9V_d35b-EEyA_FzbYF9od";
+
 const WEBHOOK_URL   = "https://discord.com/api/webhooks/1552560280481833070/fM56DVf7LqtqifvuFinmTgpbhDatkxSHwXYWomq1cQKTjneYrGrmPdvSm3YQH8CHhb3b";
 const ROLE_ID_MODOS = "1552559545828642868";   // "" = pas de ping
 const MONNAIE       = "septims";
@@ -11,244 +15,82 @@ const INTENDANTS = [
 ];
 const INSTITUTIONS = ["Thalmor", "Empire", "Académie des Mages"];
 
-// Coloris Moon Monk (communs aux 4 pièces)
-const MOON_MONK = [
-  "Basique", "Grandeur de Ra'Kazra", "Fierté d'Alkosh", "Flamme de Nahflaar",
-  "Respiration de Khenarthi", "Regal", "Aube d'Anequina", "L'ombre de Rahjiin",
-  "Clan de l'eau", "Assassins", "Émissaire impérial", "Lumière de Jone",
-];
-
-// prix = septims ; fourni = ce que le client doit apporter en plus ("" si rien)
-// variantes = liste facultative (coloris...) : une 2e liste apparaît dans la ligne
-// note = avertissement facultatif affiché à côté du coût
-// id = ID de l'article pour le give ; varIds = { "Variante": "ID" } pour les articles à variantes
-const CATALOGUE_DEFAUT = [
-  // Plates nordiques
-  { cat: "Plates nordiques", nom: "Casque nordique de plates",    fourni: "Casque d'acier",    prix: 3000 },
-  { cat: "Plates nordiques", nom: "Armure nordique de plates",    fourni: "Armure d'acier",    prix: 6000 },
-  { cat: "Plates nordiques", nom: "Gantelets nordiques de plates",fourni: "Gantelets d'acier", prix: 3000 },
-  { cat: "Plates nordiques", nom: "Bottes nordiques de plates",   fourni: "Bottes d'acier",    prix: 3000 },
-  { cat: "Plates nordiques", nom: "Bouclier nordique de plates",  fourni: "Bouclier d'acier",  prix: 4000 },
-  // Plates
-  { cat: "Plates", nom: "Casque de plates",               fourni: "Casque d'acier",    prix: 3500 },
-  { cat: "Plates", nom: "Armure de plates (sans robe)",   fourni: "Armure d'acier",    prix: 6000 },
-  { cat: "Plates", nom: "Robed steel plate armor",        fourni: "Armure d'acier",    prix: 7500 },
-  { cat: "Plates", nom: "Gantelets de plates",            fourni: "Gantelets d'acier", prix: 3500 },
-  { cat: "Plates", nom: "Bottes de plates",               fourni: "Bottes d'acier",    prix: 3500 },
-  { cat: "Plates", nom: "Casque de plates d'Ours",        fourni: "Casque d'acier",    prix: 3500 },
-  { cat: "Plates", nom: "Armure de plates d'Ours (Homme uniquement)", fourni: "Armure d'acier", prix: 6000 },
-  // Plates ornées
-  { cat: "Plates ornées", nom: "Casque de plates orné",    fourni: "Casque de plates + 25 lingots d'or",    prix: 3000 },
-  { cat: "Plates ornées", nom: "Armure de plates ornée",   fourni: "Armure de plates + 50 lingots d'or",    prix: 3000 },
-  { cat: "Plates ornées", nom: "Gantelets de plates ornés",fourni: "Gantelets de plates + 25 lingots d'or", prix: 3000 },
-  { cat: "Plates ornées", nom: "Bottes de plates ornées",  fourni: "Bottes de plates + 25 lingots d'or",    prix: 3000 },
-  // Rugged plate
-  { cat: "Rugged Plate", nom: "Rugged Plate Helmet",    fourni: "Casque d'acier",    prix: 3000 },
-  { cat: "Rugged Plate", nom: "Rugged Plate Armor",     fourni: "Armure d'acier",    prix: 6000 },
-  { cat: "Rugged Plate", nom: "Rugged Plate Gauntlets", fourni: "Gantelets d'acier", prix: 3000 },
-  { cat: "Rugged Plate", nom: "Rugged Plate Boots",     fourni: "Bottes d'acier",    prix: 3000 },
-  // Orsimer
-  { cat: "Orsimer", nom: "Orcish Warchief Armor (plastron uniquement)", fourni: "", prix: 3000 },
-  // Verre (Vvardenfell)
-  { cat: "Verre (Vvardenfell)", nom: "Casque de verre (Vvardenfell)",    fourni: "", prix: 12375 },
-  { cat: "Verre (Vvardenfell)", nom: "Armure de verre (Vvardenfell)",    fourni: "", prix: 22500 },
-  { cat: "Verre (Vvardenfell)", nom: "Gantelets de verre (Vvardenfell)", fourni: "", prix: 9000 },
-  { cat: "Verre (Vvardenfell)", nom: "Bottes de verre (Vvardenfell)",    fourni: "", prix: 12375 },
-  { cat: "Verre (Vvardenfell)", nom: "Bouclier de verre (Vvardenfell)",  fourni: "", prix: 21375 },
-  // Verre
-  { cat: "Verre", nom: "Casque de verre",    fourni: "", prix: 12375 },
-  { cat: "Verre", nom: "Armure de verre",    fourni: "", prix: 22500 },
-  { cat: "Verre", nom: "Gantelets de verre", fourni: "", prix: 9000 },
-  { cat: "Verre", nom: "Bottes de verre",    fourni: "", prix: 12375 },
-  { cat: "Verre", nom: "Bouclier de verre",  fourni: "", prix: 21375 },
-  // Armes de verre
-  { cat: "Armes de verre", nom: "Dague de verre",          fourni: "", prix: 7875 },
-  { cat: "Armes de verre", nom: "Épée de verre",           fourni: "", prix: 9000 },
-  { cat: "Armes de verre", nom: "Hache de verre",          fourni: "", prix: 9000 },
-  { cat: "Armes de verre", nom: "Masse de verre",          fourni: "", prix: 12375 },
-  { cat: "Armes de verre", nom: "Arc de verre",            fourni: "", prix: 12375 },
-  { cat: "Armes de verre", nom: "Espadon de verre",        fourni: "", prix: 13500 },
-  { cat: "Armes de verre", nom: "Hache d'armes de verre",  fourni: "", prix: 13500 },
-  { cat: "Armes de verre", nom: "Marteau de verre",        fourni: "", prix: 18000 },
-  // Northern Scaled
-  { cat: "Nordique — Northern Scaled", nom: "Northern Scaled Helmet",          fourni: "", prix: 2000 },
-  { cat: "Nordique — Northern Scaled", nom: "Northern Scaled Armor",           fourni: "", prix: 3000 },
-  { cat: "Nordique — Northern Scaled", nom: "Northern Scaled Armor (Gravée)",  fourni: "", prix: 4000 },
-  { cat: "Nordique — Northern Scaled", nom: "Northern Scaled Gauntlets",       fourni: "", prix: 2000 },
-  { cat: "Nordique — Northern Scaled", nom: "Northern Scaled Boots/Greaves",   fourni: "", prix: 2000 },
-  // Nordic Carved
-  { cat: "Nordique — Nordic Carved", nom: "Nordic Carved Helmet",   fourni: "", prix: 67000 },
-  { cat: "Nordique — Nordic Carved", nom: "Nordic Carved Armor",    fourni: "", prix: 71000 },
-  { cat: "Nordique — Nordic Carved", nom: "Nordic Carved Gauntlet", fourni: "", prix: 66000 },
-  { cat: "Nordique — Nordic Carved", nom: "Nordic Carved Boots",    fourni: "", prix: 66000 },
-  { cat: "Nordique — Nordic Carved", nom: "Nordic Shield",          fourni: "", prix: 9000 },
-  // Rugged Scales
-  { cat: "Nordique — Rugged Scales", nom: "Rugged Scales Helmet",    fourni: "", prix: 1500 },
-  { cat: "Nordique — Rugged Scales", nom: "Rugged Scales Armor",     fourni: "", prix: 2500 },
-  { cat: "Nordique — Rugged Scales", nom: "Rugged Scales Gauntlets", fourni: "", prix: 1500 },
-  { cat: "Nordique — Rugged Scales", nom: "Rugged Scales Boots",     fourni: "", prix: 1500 },
-  // Nordique divers
-  { cat: "Nordique — Divers", nom: "Armure de l'Ours",                 fourni: "", prix: 1500 },
-  { cat: "Nordique — Divers", nom: "Casque de l'Ours",                 fourni: "", prix: 1000 },
-  { cat: "Nordique — Divers", nom: "Casque nordique de l'Ours",        fourni: "", prix: 1000 },
-  { cat: "Nordique — Divers", nom: "Casque ancien de l'Ours",          fourni: "", prix: 1500 },
-  { cat: "Nordique — Divers", nom: "Armure de cuir renforcée (Homme uniquement)", fourni: "", prix: 250 },
-  { cat: "Nordique — Divers", nom: "Chapeau en cuir renforcé",         fourni: "", prix: 150 },
-  { cat: "Nordique — Divers", nom: "Chapeau en fer renforcé",          fourni: "", prix: 200 },
-  { cat: "Nordique — Divers", nom: "Chapeau en écailles renforcé",     fourni: "", prix: 150 },
-  { cat: "Nordique — Divers", nom: "Casque raccourci en acier",        fourni: "", prix: 150 },
-  { cat: "Nordique — Divers", nom: "Bottes nordiques en acier",        fourni: "", prix: 200 },
-  // Armes nordiques
-  { cat: "Nordique — Armes", nom: "Dague nordique",               fourni: "", prix: 7500 },
-  { cat: "Nordique — Armes", nom: "Arme nordique à une main",     fourni: "", prix: 8500 },
-  { cat: "Nordique — Armes", nom: "Arc nordique",                 fourni: "", prix: 9500 },
-  { cat: "Nordique — Armes", nom: "Arme nordique à deux mains",   fourni: "", prix: 10000 },
-  // ===== VÊTEMENTS =====
-  // Tenue de Skaal
-  { cat: "Vêtements — Skaal", nom: "Chapeau de Skaal",  fourni: "", prix: 1000 },
-  { cat: "Vêtements — Skaal", nom: "Manteau de Skaal",  fourni: "", prix: 2000 },
-  { cat: "Vêtements — Skaal", nom: "Gants de Skaal",    fourni: "", prix: 1000 },
-  { cat: "Vêtements — Skaal", nom: "Bottes de Skaal",   fourni: "", prix: 1000 },
-  // Ulfric
-  { cat: "Vêtements — Ulfric", nom: "Vêtements d'Ulfric", fourni: "", prix: 7500 },
-  { cat: "Vêtements — Ulfric", nom: "Gantelets d'Ulfric", fourni: "", prix: 5000 },
-  { cat: "Vêtements — Ulfric", nom: "Bottes d'Ulfric",    fourni: "", prix: 5000 },
-  // Mariage
-  { cat: "Vêtements — Mariage", nom: "Couronne de mariée",  fourni: "", prix: 1300 },
-  { cat: "Vêtements — Mariage", nom: "Robe de mariée",      fourni: "", prix: 1600 },
-  { cat: "Vêtements — Mariage", nom: "Sandales de mariée",  fourni: "", prix: 1300 },
-  { cat: "Vêtements — Mariage", nom: "Alliance",            fourni: "", prix: 1500 },
-  // Sacs
-  { cat: "Vêtements — Sacs", nom: "Glowdust Gem Backpack", fourni: "Reinforced Backpack + 20 Soul Gems", prix: 4500,
-    variantes: ["Blanc", "Bleu", "Violet"] },
-  // Hammerfell
-  { cat: "Vêtements — Hammerfell", nom: "Capuchon d'Alik'r",           fourni: "", prix: 650 },
-  { cat: "Vêtements — Hammerfell", nom: "Dark Hammerfell Garb (rouge)", fourni: "", prix: 650 },
-  { cat: "Vêtements — Hammerfell", nom: "Atours de Lenclume (bleu)",    fourni: "", prix: 650 },
-  { cat: "Vêtements — Hammerfell", nom: "Bottes de Rougegarde",         fourni: "", prix: 650 },
-  // Tenues civiles
-  { cat: "Vêtements — Civils", nom: "Vêtements de Paysan",           fourni: "", prix: 50 },
-  { cat: "Vêtements — Civils", nom: "Vêtements de Paysan bourgeois", fourni: "", prix: 50 },
-  { cat: "Vêtements — Civils", nom: "Vêtements de Marchand",         fourni: "", prix: 90 },
-  { cat: "Vêtements — Civils", nom: "Vêtements de Noble",            fourni: "", prix: 3000 },
-  { cat: "Vêtements — Civils", nom: "Habits de nobles divers",       fourni: "", prix: 5000 },
-  // Peaux & fourrures
-  { cat: "Vêtements — Peaux", nom: "Fourrure",            fourni: "", prix: 20 },
-  { cat: "Vêtements — Peaux", nom: "Peau d'ours",         fourni: "", prix: 250 },
-  { cat: "Vêtements — Peaux", nom: "Peau ornée",          fourni: "", prix: 250 },
-  { cat: "Vêtements — Peaux", nom: "Peau raffinée",       fourni: "", prix: 500 },
-  { cat: "Vêtements — Peaux", nom: "Peau raffinée grise", fourni: "", prix: 500 },
-  { cat: "Vêtements — Peaux", nom: "Fourrure royale",     fourni: "", prix: 2500 },
-  // Moon Monk
-  { cat: "Vêtements — Moon Monk", nom: "Moon Monk Mask",      fourni: "", prix: 1500, variantes: MOON_MONK },
-  { cat: "Vêtements — Moon Monk", nom: "Moon Monk Robes",     fourni: "", prix: 1500, variantes: MOON_MONK },
-  { cat: "Vêtements — Moon Monk", nom: "Moon Monk Boots",     fourni: "", prix: 1500, variantes: MOON_MONK },
-  { cat: "Vêtements — Moon Monk", nom: "Moon Monk Gauntlets", fourni: "", prix: 1500, variantes: MOON_MONK },
-  // Gothiques
-  { cat: "Vêtements — Gothiques", nom: "Capuchon de vampire", fourni: "", prix: 2500 },
-  { cat: "Vêtements — Gothiques", nom: "Armure de vampire",   fourni: "", prix: 4500 },
-  { cat: "Vêtements — Gothiques", nom: "Robe de vampire",     fourni: "", prix: 2000 },
-  { cat: "Vêtements — Gothiques", nom: "Gants de vampire",    fourni: "", prix: 2500 },
-  { cat: "Vêtements — Gothiques", nom: "Bottes de vampire",   fourni: "", prix: 2500 },
-  // Bijoux & accessoires
-  { cat: "Vêtements — Bijoux", nom: "Couronne d'or ornée d'émeraude", fourni: "", prix: 3000 },
-  { cat: "Vêtements — Bijoux", nom: "Anneau d'aigle osseux",          fourni: "", prix: 4000 },
-  { cat: "Vêtements — Bijoux", nom: "Amulette d'aigle osseux",        fourni: "", prix: 4000 },
-  // ===== ALCOOL =====
-  { cat: "Alcool", nom: "Course-Falaise",           fourni: "Bière", prix: 40 },
-  { cat: "Alcool", nom: "Vin des frères Surilies",  fourni: "Vin",   prix: 35 },
-  { cat: "Alcool", nom: "Matze",                    fourni: "Vin",   prix: 50 },
-  { cat: "Alcool", nom: "Tour d'Or Blanc",          fourni: "Vin",   prix: 55 },
-  { cat: "Alcool", nom: "Vin épicé",                fourni: "Vin",   prix: 110 },
-  { cat: "Alcool", nom: "Eau-de-vie de Cyrodiil",   fourni: "Vin",   prix: 40 },
-  { cat: "Alcool", nom: "Sujamma",                  fourni: "",      prix: 60 },
-  { cat: "Alcool", nom: "Vin de Tisebraise",        fourni: "Vin",   prix: 50 },
-  { cat: "Alcool", nom: "Shein",                    fourni: "Vin",   prix: 50 },
-  { cat: "Alcool", nom: "Vin alto",                 fourni: "Vin",   prix: 45 },
-  { cat: "Alcool", nom: "Rhum de Stross M'kai",     fourni: "",      prix: 50 },
-  { cat: "Alcool", nom: "Vin de Sang Argonien",     fourni: "Vin",   prix: 50 },
-  { cat: "Alcool", nom: "Colodvie",                 fourni: "Vin",   prix: 70 },
-  { cat: "Alcool", nom: "Flin",                     fourni: "Vin",   prix: 50 },
-  { cat: "Alcool", nom: "Vin-de-feu",               fourni: "Vin",   prix: 350 },
-  { cat: "Alcool", nom: "Vin de Jessica",           fourni: "Vin",   prix: 60 },
-  // ===== POTIONS =====
-  { cat: "Potions", nom: "Potion de soins profuse",           fourni: "", prix: 50 },
-  { cat: "Potions", nom: "Potion de vigueur profuse",         fourni: "", prix: 50 },
-  { cat: "Potions", nom: "Potion de magie profuse",           fourni: "", prix: 50 },
-  { cat: "Potions", nom: "Élixir de respiration aquatique",   fourni: "", prix: 500 },
-  { cat: "Potions", nom: "Potion d'invisibilité prolongée",   fourni: "", prix: 1500 },
-  // ===== NOURRITURE =====
-  { cat: "Nourriture", nom: "Boeuf épicé",              fourni: "", prix: 12 },
-  { cat: "Nourriture", nom: "Igname des Cendres",       fourni: "", prix: 10 },
-  { cat: "Nourriture", nom: "Viande cuite de sanglier", fourni: "", prix: 10 },
-  { cat: "Nourriture", nom: "Madeleine",                fourni: "", prix: 5 },
-  // ===== JOAILLERIE =====
-  { cat: "Joaillerie", nom: "Saphir (parfait)",     fourni: "Saphir",    prix: 450 },
-  { cat: "Joaillerie", nom: "Saphir (exquis)",      fourni: "Saphir",    prix: 800 },
-  { cat: "Joaillerie", nom: "Grenat (parfait)",     fourni: "Grenat",    prix: 500 },
-  { cat: "Joaillerie", nom: "Rubis (parfait)",      fourni: "Rubis",     prix: 850 },
-  { cat: "Joaillerie", nom: "Émeraude (parfaite)",  fourni: "Émeraude",  prix: 1250 },
-  { cat: "Joaillerie", nom: "Améthyste (parfaite)", fourni: "Améthyste", prix: 850 },
-  { cat: "Joaillerie", nom: "Diamant",              fourni: "",          prix: 1200 },
-  { cat: "Joaillerie", nom: "Diamant (parfait)",    fourni: "Diamant",   prix: 2800 },
-  // ===== INGRÉDIENTS ALCHIMIQUES =====
-  { cat: "Ingrédients alchimiques", nom: "Sucrelune x50",       fourni: "", prix: 1000 },
-  { cat: "Ingrédients alchimiques", nom: "Sel de feu x30",      fourni: "", prix: 1000 },
-  { cat: "Ingrédients alchimiques", nom: "Sel de givre x30",    fourni: "", prix: 1000 },
-  { cat: "Ingrédients alchimiques", nom: "Sel du Néant x30",    fourni: "", prix: 2000 },
-  { cat: "Ingrédients alchimiques", nom: "Œil de smilodon x10", fourni: "", prix: 1750 },
-  { cat: "Ingrédients alchimiques", nom: "Rayon de miel x50",   fourni: "", prix: 600 },
-  { cat: "Ingrédients alchimiques", nom: "Choucard x30",        fourni: "", prix: 300 },
-  // ===== MINERAIS =====
-  { cat: "Minerais", nom: "Malachite brute",        fourni: "", prix: 750 },
-  { cat: "Minerais", nom: "Vif-argent brute",       fourni: "", prix: 550 },
-  { cat: "Minerais", nom: "Lingot de métal dwemer", fourni: "", prix: 600 },
-  { cat: "Minerais", nom: "Ébonite brute",          fourni: "", prix: 20000, note: "Max 4 par semaine / licence" },
-  { cat: "Minerais", nom: "Pierre de lune brute",   fourni: "", prix: 350 },
-  // ===== AUTRES =====
-  { cat: "Autres", nom: "Masque de bois",            fourni: "",                                 prix: 50000 },
-  { cat: "Autres", nom: "Épée en bois",              fourni: "10 Clous",                         prix: 50 },
-  { cat: "Autres", nom: "Arbalète",                  fourni: "",                                 prix: 2000 },
-  { cat: "Autres", nom: "Capuchon d'exécution",      fourni: "",                                 prix: 250 },
-  { cat: "Autres", nom: "Livres divers",             fourni: "",                                 prix: 500 },
-  { cat: "Autres", nom: "Amulette nordique antique", fourni: "",                                 prix: 4000 },
-  { cat: "Autres", nom: "Carreaux d'acier x80",      fourni: "",                                 prix: 400 },
-  { cat: "Autres", nom: "Casque de berserk",         fourni: "Casque en fourrure + Peau d'ours", prix: 500 },
-  { cat: "Autres", nom: "Torche x10",                fourni: "20 Petit bois",                    prix: 100 },
-];
-
 /* =========================================================
-   État + stockage local
-   La permanence en cours (commandes + saisie en cours) reste
-   enregistrée tant qu'on ne vide pas / ne clôture pas.
+   Données
+   - catalogue + historique : Supabase (partagés par tout le monde)
+   - permanence en cours (saisie) : ce navigateur, jusqu'à clôture ou « vider »
    ========================================================= */
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
-const fmt = n => n.toLocaleString("fr-FR") + " " + MONNAIE;
-// Catalogue actif : version modifiée dans ce navigateur, sinon celui par défaut
-let CATALOGUE = CATALOGUE_DEFAUT;
-try { const c = JSON.parse(localStorage.getItem("catalogue")); if (Array.isArray(c) && c.length) CATALOGUE = c; } catch {}
-let ITEM = {};
-const rebuildItems = () => { ITEM = Object.fromEntries(CATALOGUE.map(a => [a.nom, a])); };
-rebuildItems();
-// Infos d'un article de commande : figées à l'enregistrement, sinon celles du catalogue
-const infos = x => ({ prix: x.prix ?? ITEM[x.nom]?.prix ?? 0, fourni: x.fourni ?? ITEM[x.nom]?.fourni ?? "", cat: x.cat ?? ITEM[x.nom]?.cat ?? "—" });
-const lib = x => x.nom + (x.var ? " — " + x.var : "");
-// ID pour le give : celui du catalogue actuel, sinon celui figé dans la commande
-const idOf = x => { const a = ITEM[x.nom]; const cur = a ? (x.var ? a.varIds?.[x.var] : a.id) : ""; return cur || x.id || ""; };
-const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = n => (Number(n) || 0).toLocaleString("fr-FR") + " " + MONNAIE;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const dateFR = s => s ? s.split("-").reverse().join("/") : "";
+
+// Article : { k (id Supabase), cat, nom, prix, fourni, note, id (ID item), variantes, varIds, ordre }
+const versArticle = r => ({ k: String(r.id), cat: r.cat, nom: r.nom, prix: r.prix, fourni: r.fourni || "", note: r.note || "",
+  id: r.item_id || "", variantes: r.variantes?.length ? r.variantes : null, varIds: r.var_ids || null, ordre: r.ordre });
+const versLigne = a => ({ cat: a.cat, nom: a.nom, prix: a.prix, fourni: a.fourni || "", note: a.note || "", item_id: a.id || "",
+  variantes: a.variantes?.length ? a.variantes : null, var_ids: a.varIds && Object.keys(a.varIds).length ? a.varIds : null, maj_le: new Date().toISOString() });
+
+let CATALOGUE = [], ITEM = {}, catCharge = false;
+try { const c = JSON.parse(localStorage.getItem("catalogue_cache")); if (Array.isArray(c)) CATALOGUE = c; } catch {}
+const rebuildItems = () => { ITEM = Object.fromEntries(CATALOGUE.map(a => [a.k, a])); };
+rebuildItems();
+// Ligne de commande -> clé de l'article (anciennes lignes : retrouvées par le nom)
+const cle = x => x.k && ITEM[x.k] ? x.k : (CATALOGUE.find(a => a.nom === x.nom)?.k || x.k || "");
+// Infos figées à l'enregistrement de la commande, sinon celles du catalogue
+const infos = x => { const a = ITEM[cle(x)]; return { prix: x.prix ?? a?.prix ?? 0, fourni: x.fourni ?? a?.fourni ?? "", cat: x.cat ?? a?.cat ?? "—" }; };
+const lib = x => x.nom + (x.var ? " — " + x.var : "");
+// ID pour le give : celui du catalogue actuel, sinon celui figé dans la commande
+const idOf = x => { const a = ITEM[cle(x)]; const cur = a ? (x.var ? a.varIds?.[x.var] : a.id) : ""; return cur || x.id || ""; };
 
 let state = { intendant: 0, lieu: "", date: today(), orders: [], draft: null };
 let hist = [];
 try { const s = JSON.parse(localStorage.getItem("perm_state")); if (s && Array.isArray(s.orders)) state = Object.assign(state, s); } catch {}
-try { const h = JSON.parse(localStorage.getItem("perm_hist")); if (Array.isArray(h)) hist = h.map(p => ("discord" in p) ? p : Object.assign(p, { discord: true })); } catch {}
 const save = () => { try { localStorage.setItem("perm_state", JSON.stringify(state)); } catch {} };
-const saveHist = () => { try { localStorage.setItem("perm_hist", JSON.stringify(hist)); } catch {} };
 let editId = state.draft?.editId || null;
 let restoring = false;
 
-/* ---------- Confirmation dans la page (confirm() est bloqué dans certains aperçus) ---------- */
+function statut(t) { $("dbStatus").textContent = t; }
+
+/* ---------- Chargement depuis Supabase ---------- */
+async function chargerCatalogue() {
+  const tout = [];
+  for (let de = 0; ; de += 1000) {                       // Supabase renvoie 1000 lignes max par appel
+    const { data, error } = await sb.from("articles").select("*").order("ordre").order("id").range(de, de + 999);
+    if (error) { statut("⚠ Catalogue non chargé : " + error.message + (CATALOGUE.length ? " (dernière copie affichée)" : "")); return; }
+    tout.push(...data);
+    if (data.length < 1000) break;
+  }
+  CATALOGUE = tout.map(versArticle); catCharge = true;
+  try { localStorage.setItem("catalogue_cache", JSON.stringify(CATALOGUE)); } catch {}
+  rebuildItems();
+  rafraichirLignes();
+  calcForm(); render();
+  if (!$("viewCat").hidden) renderCat();
+  if (!$("viewHist").hidden) renderHist();
+  statut(`✔ Catalogue à jour (${CATALOGUE.length} articles)`);
+}
+
+async function chargerHist() {
+  const { data, error } = await sb.from("permanences").select("*").order("cloture_le", { ascending: false }).limit(500);
+  if (error) { $("hist").innerHTML = `<p class="empty">Historique indisponible : ${esc(error.message)}</p>`; return; }
+  hist = data.map(r => ({ id: r.id, intendant: r.intendant, coffre: r.coffre, lieu: r.lieu, date: r.date, orders: r.orders || [],
+    clotureLe: r.cloture_le, discord: r.discord, envoyeLe: r.envoye_le }));
+  if (!$("viewHist").hidden) renderHist();
+}
+
+// Les autres pages ouvertes se mettent à jour toutes seules
+let tCat = null, tHist = null;
+sb.channel("maj")
+  .on("postgres_changes", { event: "*", schema: "public", table: "articles" }, () => { clearTimeout(tCat); tCat = setTimeout(chargerCatalogue, 400); })
+  .on("postgres_changes", { event: "*", schema: "public", table: "permanences" }, () => { clearTimeout(tHist); tHist = setTimeout(chargerHist, 400); })
+  .subscribe();
+// Filet de sécurité : rechargement quand on revient sur l'onglet
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { chargerCatalogue(); chargerHist(); } });
+
+/* ---------- Confirmation dans la page ---------- */
 function confirmer(txt) {
   return new Promise(res => {
     $("modalTxt").textContent = txt; $("modal").hidden = false; $("modalYes").focus();
@@ -290,15 +132,17 @@ $("lieu").onchange = () => { state.lieu = $("lieu").value; save(); };
 $("date").onchange = () => { state.date = $("date").value; save(); };
 
 /* ---------- Saisie d'une commande ---------- */
-function remplirSelect(sel, garder) {
+function remplirSelect(sel, garder, nomGarde) {
   sel.innerHTML = "";
-  sel.add(new Option("— choisir un article —", ""));
+  sel.add(new Option(CATALOGUE.length ? "— choisir un article —" : "Chargement du catalogue…", ""));
   let cur = null, g = null;
   CATALOGUE.forEach(a => {
     if (a.cat !== cur) { g = document.createElement("optgroup"); g.label = a.cat; sel.append(g); cur = a.cat; }
-    g.append(new Option(a.nom, a.nom));
+    g.append(new Option(a.nom, a.k));
   });
-  if (garder) sel.value = garder;
+  if (garder && ITEM[garder]) sel.value = garder;
+  else if (garder) { sel.add(new Option((catCharge ? "⚠ retiré du catalogue : " : "… ") + (nomGarde || garder), garder)); sel.value = garder; }
+  sel.dataset.nom = ITEM[sel.value]?.nom || nomGarde || "";
 }
 
 function majVariante(tr, garder) {
@@ -311,17 +155,28 @@ function majVariante(tr, garder) {
   if (garder && a.variantes.includes(garder)) v.value = garder;
 }
 
-function ajouterLigne(nom, qte, variante) {
+// Catalogue rechargé : on garde ce qui est choisi dans la saisie en cours
+function rafraichirLignes() {
+  restoring = true;
+  document.querySelectorAll("#lines tbody tr").forEach(tr => {
+    const sel = tr.querySelector(".item"), v = tr.querySelector(".var").value;
+    remplirSelect(sel, cle({ k: sel.value, nom: sel.dataset.nom }), sel.dataset.nom); majVariante(tr, v);
+  });
+  restoring = false;
+}
+
+function ajouterLigne(x) {
+  x = x || {};
   const tr = document.createElement("tr");
   tr.innerHTML = `<td><select class="item"></select><select class="var" hidden style="margin-top:6px"></select></td>
-    <td class="qty"><input type="number" class="q" min="1" value="${qte || 1}"></td>
+    <td class="qty"><input type="number" class="q" min="1" value="${x.qte || 1}"></td>
     <td class="cost"></td>
     <td class="del"><button type="button" class="x" title="Retirer">×</button></td>`;
-  remplirSelect(tr.querySelector(".item"), nom || "");
-  majVariante(tr, variante);
+  remplirSelect(tr.querySelector(".item"), cle(x), x.nom);
+  majVariante(tr, x.var);
   tr.querySelector(".var").onchange = calcForm;
   tr.querySelector(".x").onclick = () => { tr.remove(); if (!$("lines").tBodies[0].children.length) ajouterLigne(); calcForm(); };
-  tr.querySelector(".item").onchange = () => { majVariante(tr); calcForm(); };
+  tr.querySelector(".item").onchange = e => { e.target.dataset.nom = ITEM[e.target.value]?.nom || ""; majVariante(tr); calcForm(); };
   tr.querySelector(".q").oninput = calcForm;
   $("lines").tBodies[0].append(tr);
   calcForm();
@@ -329,16 +184,19 @@ function ajouterLigne(nom, qte, variante) {
 $("addLine").onclick = () => ajouterLigne();
 
 function lignesBrutes() {
-  return [...document.querySelectorAll("#lines tbody tr")].map(tr => ({ nom: tr.querySelector(".item").value, var: tr.querySelector(".var").value, qte: parseInt(tr.querySelector(".q").value, 10) || 1 }));
+  return [...document.querySelectorAll("#lines tbody tr")].map(tr => {
+    const sel = tr.querySelector(".item"), k = sel.value;
+    return { k, nom: ITEM[k]?.nom || sel.dataset.nom || "", var: tr.querySelector(".var").value, qte: parseInt(tr.querySelector(".q").value, 10) || 1 };
+  });
 }
 function lignesForm() {
   const m = new Map();
   lignesBrutes().forEach(x => {
-    if (!x.nom || !(x.qte > 0)) return;
-    const k = x.nom + "|" + (x.var || "");
-    m.set(k, (m.get(k) || 0) + x.qte);
+    if (!x.k || !(x.qte > 0)) return;
+    const k = x.k + "|" + (x.var || "");
+    if (m.has(k)) m.get(k).qte += x.qte; else m.set(k, Object.assign({}, x));
   });
-  return [...m].map(([k, qte]) => { const [nom, v] = k.split("|"); return v ? { nom, var: v, qte } : { nom, qte }; });
+  return [...m.values()].map(x => { if (!x.var) delete x.var; return x; });
 }
 
 function coutTexte(a, q) {
@@ -379,8 +237,8 @@ function chargerForm(d) {
   restoring = true;
   $("client").value = d?.client || ""; $("clientType").value = d?.type || "Particulier"; $("notes").value = d?.notes || "";
   $("lines").tBodies[0].innerHTML = "";
-  const ls = d?.lines?.length ? d.lines : [{ nom: "", qte: 1 }];
-  ls.forEach(x => ajouterLigne(x.nom, x.qte, x.var));
+  const ls = d?.lines?.length ? d.lines : [{ qte: 1 }];
+  ls.forEach(x => ajouterLigne(x));
   restoring = false;
   modeEdition(editId ? state.orders.find(o => o.id === editId) : null);
   saveDraft();
@@ -395,9 +253,11 @@ $("saveOrder").onclick = () => {
   const client = $("client").value.trim(), items = lignesForm();
   if (!client) return flash($("formMsg"), "Renseigne le nom du client.", false);
   if (!items.length) return flash($("formMsg"), "Ajoute au moins un article.", false);
-  const sansVar = items.find(x => ITEM[x.nom]?.variantes && !x.var);
+  const absent = items.find(x => !ITEM[x.k]);
+  if (absent) return flash($("formMsg"), `« ${absent.nom || "article"} » n'est pas (ou plus) dans le catalogue : retire la ligne.`, false);
+  const sansVar = items.find(x => ITEM[x.k].variantes && !x.var);
   if (sansVar) return flash($("formMsg"), `Choisis la variante pour « ${sansVar.nom} ».`, false);
-  const fig = items.map(x => { const a = ITEM[x.nom]; return Object.assign(x, { prix: a.prix, fourni: a.fourni || "", cat: a.cat, id: (x.var ? a.varIds?.[x.var] : a.id) || "" }); });
+  const fig = items.map(x => { const a = ITEM[x.k]; return Object.assign(x, { nom: a.nom, prix: a.prix, fourni: a.fourni || "", cat: a.cat, id: (x.var ? a.varIds?.[x.var] : a.id) || "" }); });
   const o = { id: editId || Date.now().toString(36), client, type: $("clientType").value, notes: $("notes").value.trim(), items: fig };
   const edit = !!editId;
   if (edit) state.orders = state.orders.map(x => x.id === editId ? o : x);
@@ -414,12 +274,12 @@ const totalPerm = orders => orders.reduce((s, o) => s + totalOrder(o), 0);
 function agreger(orders) {
   const m = new Map();
   orders.forEach(o => o.items.forEach(x => {
-    const k = lib(x);
-    if (!m.has(k)) m.set(k, { nom: k, base: x.nom, var: x.var || "", qte: 0, cat: infos(x).cat, id: idOf(x) });
+    const k = cle(x) + "|" + (x.var || "");
+    if (!m.has(k)) m.set(k, { nom: lib(x), base: cle(x), var: x.var || "", qte: 0, cat: infos(x).cat, id: idOf(x) });
     m.get(k).qte += x.qte;
   }));
-  const ordre = n => { const i = CATALOGUE.findIndex(a => a.nom === n); return i < 0 ? 9999 : i; };
-  return [...m.values()].sort((a, b) => ordre(a.base) - ordre(b.base) || a.var.localeCompare(b.var));
+  const ordre = k => { const i = CATALOGUE.findIndex(a => a.k === k); return i < 0 ? 1e9 : i; };
+  return [...m.values()].sort((a, b) => ordre(a.base) - ordre(b.base) || a.var.localeCompare(b.var, "fr", { numeric: true }));
 }
 
 /* ---------- Rendu (partagé avec l'historique) ---------- */
@@ -429,7 +289,7 @@ function htmlCommandes(orders, actions, permId) {
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
     <ul>${o.items.map(x => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
-    ${permId ? `<div class="row" style="margin-top:8px"><label class="liv"><input type="checkbox" data-liv="${permId}|${o.id}" ${o.livreLe ? "checked" : ""}> Livré</label>
+    ${permId ? `<div class="row" style="margin-top:8px"><label class="liv"><input type="checkbox" data-liv="${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""}> Livré</label>
       ${o.livreLe ? `<span class="hint">le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>` : ""}</div>` : ""}
     ${actions ? `<div class="row" style="margin-top:8px"><button class="btn small" data-e="${o.id}">Modifier</button><button class="btn small" data-d="${o.id}">Supprimer</button></div>` : ""}
   </div>`).join("");
@@ -486,13 +346,7 @@ async function post(payload) {
   if (!r.ok) throw new Error("Discord a répondu " + r.status);
 }
 
-function snapshot() {
-  const it = INTENDANTS[state.intendant];
-  return { id: Date.now().toString(36), intendant: it.nom, coffre: it.coffre, lieu: state.lieu, date: state.date,
-           orders: JSON.parse(JSON.stringify(state.orders)), clotureLe: new Date().toISOString(), discord: false };
-}
-
-// Envoie une permanence sur Discord (lève une erreur si ça échoue)
+// Envoie une permanence (lève une erreur si ça échoue) — un seul message, sans détail par client
 async function envoyerDiscord(p) {
   const ag = agreger(p.orders), nb = ag.reduce((s, x) => s + x.qte, 0);
   const titre = `Permanence ${p.lieu} — ${dateFR(p.date)}`;
@@ -508,41 +362,43 @@ async function envoyerDiscord(p) {
   if (sansId) embeds[0].fields.push({ name: "⚠ Attention", value: `${sansId} article(s) sans ID dans le catalogue`, inline: false });
   embeds[embeds.length - 1].footer = { text: `Encaissé : ${fmt(totalPerm(p.orders))}` };
   embeds[embeds.length - 1].timestamp = new Date().toISOString();
-  const detail = chunks(p.orders.map((o, i) =>
-    `**${i + 1}. ${o.client}** *(${o.type})* — ${fmt(totalOrder(o))}\n` +
-    o.items.map(x => `  ${x.qte} × ${lib(x)}`).join("\n") + (o.notes ? `\n  📝 ${o.notes}` : "")), 3800);
-
   await post({
     username: "Compagnie de l'Empire Oriental",
     content: ROLE_ID_MODOS ? `<@&${ROLE_ID_MODOS}> nouvelle commande de permanence` : "Nouvelle commande de permanence",
     allowed_mentions: { roles: ROLE_ID_MODOS ? [ROLE_ID_MODOS] : [] },
     embeds: embeds.slice(0, 10)
   });
-  for (let i = 0; i < detail.length; i++) {
-    await post({ username: "Compagnie de l'Empire Oriental", allowed_mentions: { parse: [] },
-      embeds: [{ title: i === 0 ? `🧾 Détail par client — ${titre}` : "🧾 (suite)", description: detail[i], color: 0x6d5d49 }] });
-  }
 }
+
+function snapshot() {
+  const it = INTENDANTS[state.intendant];
+  return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), intendant: it.nom, coffre: it.coffre, lieu: state.lieu, date: state.date,
+           orders: JSON.parse(JSON.stringify(state.orders)), clotureLe: new Date().toISOString(), discord: false };
+}
+const versPerm = p => ({ id: p.id, intendant: p.intendant, coffre: p.coffre, lieu: p.lieu, date: p.date || null, orders: p.orders,
+  cloture_le: p.clotureLe, discord: !!p.discord, envoye_le: p.envoyeLe || null });
 
 $("send").onclick = async () => {
   if (!state.orders.length) return flash($("sendMsg"), "Aucune commande dans cette permanence.", false);
   if (!state.date) return flash($("sendMsg"), "Renseigne la date.", false);
-  if (!await confirmer(`Clôturer la permanence (${state.orders.length} client(s)) et envoyer la commande à l'administration ?`)) return;
+  if (!await confirmer(`Clôturer la permanence (${state.orders.length} client(s)) et commander aux administrateurs impériaux ?`)) return;
 
   const p = snapshot();
   $("send").disabled = true;
+  // 1. archivage (obligatoire : sinon on ne vide rien)
+  const { error } = await sb.from("permanences").insert(versPerm(p));
+  if (error) { $("send").disabled = false; return flash($("sendMsg"), "Impossible d'archiver la permanence (" + error.message + "). Rien n'a été envoyé ni effacé, réessaie.", false); }
+  // 2. envoi Discord
   let erreur = null;
-  try { await envoyerDiscord(p); p.discord = true; p.envoyeLe = new Date().toISOString(); }
+  try { await envoyerDiscord(p); p.discord = true; p.envoyeLe = new Date().toISOString(); await sb.from("permanences").update({ discord: true, envoye_le: p.envoyeLe }).eq("id", p.id); }
   catch (e) { erreur = e.message; }
-
-  // Dans tous les cas : archivage + permanence vidée
-  hist.unshift(p); saveHist();
+  // 3. permanence vidée
   state.orders = []; editId = null; state.draft = null; save();
-  resetForm(); render();
+  resetForm(); render(); chargerHist();
   $("send").disabled = false;
 
-  if (!erreur) flash($("sendMsg"), "Commande envoyée à l'administration ✔ Permanence clôturée et archivée dans l'historique.", true);
-  else flash($("sendMsg"), `Permanence clôturée et archivée dans l'historique, mais pas envoyée sur Discord (${erreur}). Tu pourras la renvoyer depuis l'onglet Historique.`, false);
+  if (!erreur) flash($("sendMsg"), "Commande transmise aux administrateurs impériaux ✔ Permanence clôturée et archivée dans l'historique.", true);
+  else flash($("sendMsg"), `Permanence clôturée et archivée, mais pas transmise sur Discord (${erreur}). Tu pourras la renvoyer depuis l'onglet Historique.`, false);
 };
 
 async function copier(txt, el) {
@@ -560,7 +416,7 @@ $("reset").onclick = async () => {
   state.orders = []; state.draft = null; editId = null; save(); resetForm(); render();
 };
 
-/* ---------- Historique ---------- */
+/* ---------- Historique (Supabase) ---------- */
 INTENDANTS.forEach(it => $("fInt").add(new Option(it.nom, it.nom)));
 [...new Set(INTENDANTS.flatMap(it => it.lieux))].forEach(l => $("fLieu").add(new Option(l, l)));
 $("fInt").onchange = $("fLieu").onchange = $("fClient").oninput = renderHist;
@@ -576,24 +432,26 @@ function renderHist() {
   box.innerHTML = list.map(p => {
     const nb = p.orders.reduce((s, o) => s + o.items.reduce((t, x) => t + x.qte, 0), 0);
     const liv = p.orders.filter(o => o.livreLe).length, fini = liv === p.orders.length;
-    return `<details class="perm ${fini ? "done" : "pending"}" data-id="${p.id}" ${ouverts.has(p.id) ? "open" : ""}>
+    return `<details class="perm ${fini ? "done" : "pending"}" data-id="${esc(p.id)}" ${ouverts.has(p.id) ? "open" : ""}>
       <summary><b>${esc(p.lieu)} — ${dateFR(p.date)}</b><span class="hint">${esc(p.intendant)} · ${p.orders.length} client(s) · ${nb} article(s)</span>
-        ${p.discord ? '<span class="tag ok">Envoyée</span>' : '<span class="tag err">Non envoyée sur Discord</span>'}
+        ${p.discord ? '<span class="tag ok">Transmise</span>' : '<span class="tag err">Non transmise</span>'}
         <span class="tag ${fini ? "ok" : ""}">${fini ? "✔ Tout livré" : `Livré ${liv}/${p.orders.length}`}</span>
         <span class="total" style="font-size:.9rem">${fmt(totalPerm(p.orders))}</span></summary>
       <div class="body">
-        <div class="hint">Clôturée le ${new Date(p.clotureLe || p.envoyeLe).toLocaleString("fr-FR")}${p.discord && p.envoyeLe ? " — envoyée le " + new Date(p.envoyeLe).toLocaleString("fr-FR") : ""}</div>
+        <div class="hint">Clôturée le ${new Date(p.clotureLe).toLocaleString("fr-FR")}${p.discord && p.envoyeLe ? " — transmise le " + new Date(p.envoyeLe).toLocaleString("fr-FR") : ""}</div>
         <h3>Commandé à l'administration</h3>${htmlRecap(p.orders, p.coffre)}
         <h3>Commandes détaillées</h3>${htmlCommandes(p.orders, false, p.id)}
-        <div class="row" style="margin-top:8px">${p.discord ? "" : `<button class="btn small primary" data-hs="${p.id}">Envoyer sur Discord</button>`}<button class="btn small" data-hc="${p.id}">Copier le récap</button><button class="btn small" data-hd="${p.id}">Supprimer de l'historique</button></div>
-        <div class="msg" id="hm-${p.id}"></div>
+        <div class="row" style="margin-top:8px">${p.discord ? "" : `<button class="btn small primary" data-hs="${esc(p.id)}">Transmettre aux administrateurs</button>`}<button class="btn small" data-hc="${esc(p.id)}">Copier le récap</button><button class="btn small" data-hd="${esc(p.id)}">Supprimer de l'historique</button></div>
+        <div class="msg" id="hm-${esc(p.id)}"></div>
       </div></details>`;
   }).join("");
-  box.querySelectorAll("[data-liv]").forEach(c => c.onchange = () => {
+  box.querySelectorAll("[data-liv]").forEach(c => c.onchange = async () => {
     const [pid, oid] = c.dataset.liv.split("|");
-    const o = hist.find(p => p.id === pid).orders.find(x => x.id === oid);
+    const p = hist.find(x => x.id === pid), o = p.orders.find(x => x.id === oid);
     o.livreLe = c.checked ? new Date().toISOString() : null;
-    saveHist(); renderHist();
+    renderHist();
+    const { error } = await sb.from("permanences").update({ orders: p.orders }).eq("id", pid);
+    if (error) { flash($("hm-" + pid), "Non enregistré : " + error.message, false); chargerHist(); }
   });
   box.querySelectorAll("[data-hc]").forEach(b => b.onclick = () => copier(recapTexte(hist.find(p => p.id === b.dataset.hc)), $("hm-" + b.dataset.hc)));
   box.querySelectorAll("[data-hs]").forEach(b => b.onclick = async () => {
@@ -601,32 +459,24 @@ function renderHist() {
     b.disabled = true;
     try {
       await envoyerDiscord(p);
-      p.discord = true; p.envoyeLe = new Date().toISOString(); saveHist(); renderHist();
+      p.discord = true; p.envoyeLe = new Date().toISOString();
+      await sb.from("permanences").update({ discord: true, envoye_le: p.envoyeLe }).eq("id", p.id);
+      renderHist();
     } catch (e) {
       b.disabled = false;
       flash($("hm-" + p.id), "Échec de l'envoi (" + e.message + ").", false);
     }
   });
   box.querySelectorAll("[data-hd]").forEach(b => b.onclick = async () => {
-    if (!await confirmer("Supprimer cette permanence de l'historique ?")) return;
-    hist = hist.filter(p => p.id !== b.dataset.hd); saveHist(); renderHist();
+    if (!await confirmer("Supprimer cette permanence de l'historique (pour tout le monde) ?")) return;
+    const { error } = await sb.from("permanences").delete().eq("id", b.dataset.hd);
+    if (error) return flash($("hm-" + b.dataset.hd), "Suppression impossible : " + error.message, false);
+    hist = hist.filter(p => p.id !== b.dataset.hd); renderHist();
   });
 }
 
-/* ---------- Gestion du catalogue ---------- */
-let catEdit = null;   // nom de l'article en cours de modification
-
-function saveCatalogue(msg) {
-  try { localStorage.setItem("catalogue", JSON.stringify(CATALOGUE)); } catch {}
-  rebuildItems();
-  // rafraîchit les listes de la saisie en cours sans perdre ce qui est choisi
-  document.querySelectorAll("#lines tbody tr").forEach(tr => {
-    const sel = tr.querySelector(".item"), v = tr.querySelector(".var").value;
-    remplirSelect(sel, sel.value); majVariante(tr, v);
-  });
-  calcForm(); render(); renderCat();
-  if (msg) flash($("cMsg"), msg, true);
-}
+/* ---------- Gestion du catalogue (Supabase) ---------- */
+let catEdit = null;   // clé de l'article en cours de modification
 
 function resetCatForm() {
   catEdit = null;
@@ -638,15 +488,25 @@ function resetCatForm() {
 }
 $("cCancel").onclick = resetCatForm;
 
-$("cSave").onclick = () => {
+// Ordre d'un nouvel article : juste après le dernier de sa catégorie (ou à la fin)
+function ordreApres(cat, sauf) {
+  const liste = CATALOGUE.filter(x => x.k !== sauf);
+  let i = -1;
+  liste.forEach((x, n) => { if (x.cat === cat) i = n; });
+  if (i < 0) return (liste.length ? liste[liste.length - 1].ordre : 0) + 10;
+  const suivant = liste[i + 1];
+  return suivant ? (liste[i].ordre + suivant.ordre) / 2 : liste[i].ordre + 10;
+}
+
+$("cSave").onclick = async () => {
   const cat = $("cCat").value.trim(), nom = $("cNom").value.trim(), prixTxt = $("cPrix").value.trim();
   const prix = Number(prixTxt);
+  if (!catCharge) return flash($("cMsg"), "Le catalogue n'est pas encore chargé.", false);
   if (!cat) return flash($("cMsg"), "Renseigne la catégorie.", false);
   if (!nom) return flash($("cMsg"), "Renseigne le nom de l'article.", false);
   if (prixTxt === "" || !Number.isFinite(prix) || prix < 0) return flash($("cMsg"), "Renseigne un prix valide.", false);
-  if (nom !== catEdit && ITEM[nom]) return flash($("cMsg"), `« ${nom} » existe déjà dans le catalogue.`, false);
-  const a = { cat, nom, fourni: $("cFourni").value.trim(), prix };
-  if ($("cId").value.trim()) a.id = $("cId").value.trim();
+  if (CATALOGUE.some(x => x.cat === cat && x.nom === nom && x.k !== catEdit)) return flash($("cMsg"), `« ${nom} » existe déjà dans cette catégorie.`, false);
+  const a = { cat, nom, fourni: $("cFourni").value.trim(), prix: Math.round(prix), note: $("cNote").value.trim(), id: $("cId").value.trim() };
   // "Blanc = 0A1B2C, Bleu" -> variantes + varIds
   const ancien = catEdit ? ITEM[catEdit] : null;
   const vars = [], varIds = {};
@@ -657,26 +517,24 @@ $("cSave").onclick = () => {
     const garde = idV || ancien?.varIds?.[nomV] || "";
     if (garde) varIds[nomV] = garde;
   });
-  if (vars.length) { a.variantes = vars; if (Object.keys(varIds).length) a.varIds = varIds; }
-  if ($("cNote").value.trim()) a.note = $("cNote").value.trim();
+  if (vars.length) { a.variantes = vars; a.varIds = varIds; }
 
-  CATALOGUE = CATALOGUE.slice();
-  if (catEdit) {
-    const i = CATALOGUE.findIndex(x => x.nom === catEdit);
-    if (CATALOGUE[i].cat === cat) CATALOGUE[i] = a;
-    else { CATALOGUE.splice(i, 1); insererDansCategorie(a); }
-  } else insererDansCategorie(a);
-  const modif = !!catEdit;
+  const ligne = versLigne(a);
+  $("cSave").disabled = true;
+  let res;
+  if (ancien) {
+    if (ancien.cat !== cat) ligne.ordre = ordreApres(cat, ancien.k);
+    res = await sb.from("articles").update(ligne).eq("id", ancien.k);
+  } else {
+    ligne.ordre = ordreApres(cat);
+    res = await sb.from("articles").insert(ligne);
+  }
+  $("cSave").disabled = false;
+  if (res.error) return flash($("cMsg"), "Non enregistré : " + res.error.message, false);
   resetCatForm();
-  saveCatalogue(modif ? `« ${nom} » modifié.` : `« ${nom} » ajouté au catalogue.`);
+  flash($("cMsg"), ancien ? `« ${nom} » modifié.` : `« ${nom} » ajouté au catalogue.`, true);
+  await chargerCatalogue();
 };
-
-// place l'article à la fin de sa catégorie (ou crée la catégorie à la fin)
-function insererDansCategorie(a) {
-  let last = -1;
-  CATALOGUE.forEach((x, i) => { if (x.cat === a.cat) last = i; });
-  if (last < 0) CATALOGUE.push(a); else CATALOGUE.splice(last + 1, 0, a);
-}
 
 function renderCat() {
   $("nbArticles").textContent = CATALOGUE.length;
@@ -686,23 +544,23 @@ function renderCat() {
   majCompteurId();
   const list = CATALOGUE.filter(a => (!q || (a.nom + " " + a.cat + " " + (a.fourni || "") + " " + (a.id || "") + " " + Object.values(a.varIds || {}).join(" ")).toLowerCase().includes(q))
     && (!seulSansId || manqueId(a)));
-  if (!list.length) { $("catTable").innerHTML = '<p class="empty">Aucun article.</p>'; return; }
+  if (!list.length) { $("catTable").innerHTML = `<p class="empty">${CATALOGUE.length ? "Aucun article." : "Chargement du catalogue…"}</p>`; return; }
   let cur = null, rows = "";
   list.forEach(a => {
     if (a.cat !== cur) { rows += `<tr class="cat-head"><td colspan="5">${esc(a.cat)}</td></tr>`; cur = a.cat; }
     const idCell = a.variantes
-      ? a.variantes.map(v => `<div class="id-var">${esc(v)} <input class="id-input${a.varIds?.[v] ? "" : " missing"}" data-idnom="${esc(a.nom)}" data-idvar="${esc(v)}" value="${esc(a.varIds?.[v] || "")}" placeholder="ID"></div>`).join("")
-      : `<input class="id-input${a.id ? "" : " missing"}" data-idnom="${esc(a.nom)}" value="${esc(a.id || "")}" placeholder="ID">`;
+      ? a.variantes.map(v => `<div class="id-var">${esc(v)} <input class="id-input${a.varIds?.[v] ? "" : " missing"}" data-idk="${a.k}" data-idvar="${esc(v)}" value="${esc(a.varIds?.[v] || "")}" placeholder="ID"></div>`).join("")
+      : `<input class="id-input${a.id ? "" : " missing"}" data-idk="${a.k}" value="${esc(a.id || "")}" placeholder="ID">`;
     rows += `<tr class="cat-row"><td><b>${esc(a.nom)}</b>${a.variantes ? `<br><span class="hint">${a.variantes.length} variantes</span>` : ""}${a.note ? `<br><span class="hint">⚠ ${esc(a.note)}</span>` : ""}</td>
       <td class="f hint">${a.fourni ? "Fournit : " + esc(a.fourni) : ""}</td>
       <td class="p">${fmt(a.prix)}</td>
       <td class="idc">${idCell}</td>
-      <td class="act"><button class="btn small" data-ce="${esc(a.nom)}">Modifier</button> <button class="btn small" data-cd="${esc(a.nom)}">Supprimer</button></td></tr>`;
+      <td class="act"><button class="btn small" data-ce="${a.k}">Modifier</button> <button class="btn small" data-cd="${a.k}">Supprimer</button></td></tr>`;
   });
   $("catTable").innerHTML = `<table><thead><tr><th>Article</th><th>À fournir</th><th style="text-align:right">Prix</th><th style="text-align:right">ID Item</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
   $("catTable").querySelectorAll("[data-ce]").forEach(b => b.onclick = () => {
     const a = ITEM[b.dataset.ce];
-    catEdit = a.nom;
+    catEdit = a.k;
     $("cCat").value = a.cat; $("cNom").value = a.nom; $("cPrix").value = a.prix;
     $("cId").value = a.id || "";
     $("cFourni").value = a.fourni || ""; $("cNote").value = a.note || "";
@@ -713,27 +571,31 @@ function renderCat() {
     $("catFormCard").classList.add("editing");
     $("catFormCard").scrollIntoView({ behavior: "smooth" });
   });
-  $("catTable").querySelectorAll("[data-idnom]").forEach(inp => inp.onchange = () => {
-    const i = CATALOGUE.findIndex(x => x.nom === inp.dataset.idnom); if (i < 0) return;
-    CATALOGUE = CATALOGUE.slice();
-    const a = Object.assign({}, CATALOGUE[i]), val = inp.value.trim();
-    if (inp.dataset.idvar !== undefined) {
-      a.varIds = Object.assign({}, a.varIds);
-      if (val) a.varIds[inp.dataset.idvar] = val; else delete a.varIds[inp.dataset.idvar];
-      if (!Object.keys(a.varIds).length) delete a.varIds;
-    } else if (val) a.id = val; else delete a.id;
-    CATALOGUE[i] = a;
+  // ID modifié dans le tableau -> enregistré tout de suite pour tout le monde
+  $("catTable").querySelectorAll("[data-idk]").forEach(inp => inp.onchange = async () => {
+    const a = ITEM[inp.dataset.idk]; if (!a) return;
+    const val = inp.value.trim(), v = inp.dataset.idvar;
+    let maj;
+    if (v !== undefined) {
+      const varIds = Object.assign({}, a.varIds);
+      if (val) varIds[v] = val; else delete varIds[v];
+      a.varIds = varIds;
+      maj = { var_ids: Object.keys(varIds).length ? varIds : null };
+    } else { a.id = val; maj = { item_id: val }; }
     inp.classList.toggle("missing", !val);
-    // sauvegarde légère : pas de re-rendu pour ne pas perdre le focus
-    try { localStorage.setItem("catalogue", JSON.stringify(CATALOGUE)); } catch {}
-    rebuildItems(); majCompteurId();
+    majCompteurId();
+    const { error } = await sb.from("articles").update(Object.assign(maj, { maj_le: new Date().toISOString() })).eq("id", a.k);
+    if (error) { flash($("cIdMsg"), `ID de « ${a.nom} » non enregistré : ${error.message}`, false); chargerCatalogue(); }
+    else { flash($("cIdMsg"), `ID de « ${a.nom} » enregistré.`, true); try { localStorage.setItem("catalogue_cache", JSON.stringify(CATALOGUE)); } catch {} }
   });
   $("catTable").querySelectorAll("[data-cd]").forEach(b => b.onclick = async () => {
-    const nom = b.dataset.cd;
-    if (!await confirmer(`Retirer « ${nom} » du catalogue ? Les commandes déjà enregistrées ne sont pas modifiées.`)) return;
-    CATALOGUE = CATALOGUE.filter(x => x.nom !== nom);
-    if (catEdit === nom) resetCatForm();
-    saveCatalogue(`« ${nom} » retiré du catalogue.`);
+    const a = ITEM[b.dataset.cd];
+    if (!await confirmer(`Retirer « ${a.nom} » du catalogue (pour tout le monde) ? Les commandes déjà enregistrées ne sont pas modifiées.`)) return;
+    const { error } = await sb.from("articles").delete().eq("id", a.k);
+    if (error) return flash($("cIdMsg"), "Suppression impossible : " + error.message, false);
+    if (catEdit === a.k) resetCatForm();
+    flash($("cIdMsg"), `« ${a.nom} » retiré du catalogue.`, true);
+    await chargerCatalogue();
   });
 }
 $("cSearch").oninput = renderCat;
@@ -745,39 +607,14 @@ function majCompteurId() {
   $("nbMissing").textContent = n ? `${n} article(s) sans ID complet` : "✔ Tous les articles ont un ID";
 }
 
-// Sauvegarde / partage
+// Sauvegarde de secours
 $("cExport").onclick = () => {
-  const blob = new Blob([JSON.stringify(CATALOGUE, null, 2)], { type: "application/json" });
+  const data = CATALOGUE.map(({ k, ordre, ...a }) => a);
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = "catalogue-" + today() + ".json";
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-};
-$("cImport").onchange = async e => {
-  const f = e.target.files[0]; e.target.value = "";
-  if (!f) return;
-  try {
-    const data = JSON.parse(await f.text());
-    const ok = Array.isArray(data) && data.length && data.every(a => a && typeof a.nom === "string" && typeof a.cat === "string" && Number.isFinite(Number(a.prix)));
-    if (!ok) throw new Error("format invalide");
-    if (!await confirmer(`Remplacer le catalogue actuel par celui du fichier (${data.length} articles) ?`)) return;
-    CATALOGUE = data.map(a => Object.assign({}, a, { prix: Number(a.prix), fourni: a.fourni || "" }));
-    resetCatForm(); saveCatalogue();
-    flash($("cSaveMsg"), `Catalogue importé (${CATALOGUE.length} articles).`, true);
-  } catch (err) { flash($("cSaveMsg"), "Import impossible : " + err.message, false); }
-};
-$("cCopyJs").onclick = async () => {
-  const lignes = CATALOGUE.map(a => "  { " + Object.entries(a).map(([k, v]) => k + ": " + JSON.stringify(v).replace(/","/g, '", "')).join(", ") + " },");
-  const txt = "const CATALOGUE_DEFAUT = [\n" + lignes.join("\n") + "\n];";
-  try { await navigator.clipboard.writeText(txt); flash($("cSaveMsg"), "Copié. Colle-le dans script.js à la place du bloc CATALOGUE_DEFAUT.", true); }
-  catch { flash($("cSaveMsg"), "Copie impossible sur ce navigateur.", false); }
-};
-$("cReset").onclick = async () => {
-  if (!await confirmer("Revenir au catalogue d'origine ? Tes ajouts et suppressions faits ici seront perdus.")) return;
-  CATALOGUE = CATALOGUE_DEFAUT;
-  try { localStorage.removeItem("catalogue"); } catch {}
-  resetCatForm(); saveCatalogue();
-  flash($("cSaveMsg"), "Catalogue d'origine rétabli.", true);
 };
 
 /* ---------- Démarrage ---------- */
@@ -786,3 +623,5 @@ chargerForm(state.draft);
 render();
 let t0 = "perm"; try { t0 = sessionStorage.getItem("tab") || "perm"; } catch {}
 showTab(t0);
+if (SUPABASE_URL.includes("XXXXXXXX")) statut("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.");
+else { chargerCatalogue(); chargerHist(); }
