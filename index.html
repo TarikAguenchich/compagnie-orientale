@@ -9,15 +9,30 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="wrap">
+<!-- Connexion -->
+<div class="wrap" id="login" hidden>
+  <div class="card login-box">
+    <h1>Compagnie de l'Empire Oriental</h1>
+    <p class="sub">Registre de permanence d'Intendant</p>
+    <p>Connecte-toi avec ton compte Discord. L'accès dépend de ton rôle sur le serveur : <b>Intendant</b> ou <b>Administrateur</b>.</p>
+    <p class="msg err" id="loginMsg" hidden style="display:block"></p>
+    <div class="row" style="margin-top:14px">
+      <button type="button" class="btn primary discord" id="loginBtn">Se connecter avec Discord</button>
+      <button type="button" class="btn" id="loginOut" hidden>Se déconnecter</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <div class="userbar"><img id="userAvatar" alt="" hidden><span><b id="userName"></b> · <span id="userRole"></span></span><button type="button" class="btn small" id="logout">Déconnexion</button></div>
   <h1>Compagnie de l'Empire Oriental</h1>
   <p class="sub">Registre de permanence d'Intendant</p>
 
   <nav class="tabs">
     <button type="button" id="tabPerm" class="on">Permanence en cours</button>
     <button type="button" id="tabHist">Historique</button>
-    <button type="button" id="tabCat">Catalogue</button>
-    <button type="button" id="tabReg">Réglages</button>
+    <button type="button" id="tabCat" hidden>Catalogue</button>
+    <button type="button" id="tabReg" hidden>Réglages</button>
   </nav>
   <p class="hint" id="dbStatus" style="margin:-8px 0 14px"></p>
 
@@ -165,6 +180,11 @@
       <div class="msg" id="rCofMsg"></div>
       <p class="hint">La liste à droite indique l'intendant qui utilise ce coffre : tu peux le changer directement.</p>
       <div id="regCof"></div>
+    </div>
+    <div class="card">
+      <h2>Comptes connectés</h2>
+      <p class="hint" style="margin-top:0">Les droits viennent des rôles Discord, vérifiés à chaque connexion (valables 7 jours). Pour retirer un accès, retire le rôle sur Discord.</p>
+      <div id="regComptes"></div>
     </div>
   </div>
 </div>

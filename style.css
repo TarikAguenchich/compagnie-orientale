@@ -114,3 +114,9 @@ code{font-size:.85em;background:var(--soft);padding:1px 4px;border-radius:3px}
   .reg-row td{border:none;padding:0}
   .reg-row td.reg-lien{grid-column:1 / -1;grid-row:2;width:auto}
 }
+.login-box{max-width:520px;margin:60px auto}
+.login-box h1{font-size:1.5rem}
+.btn.discord{background:#5865F2;border-color:#5865F2;color:#fff}
+#loginMsg[hidden]{display:none !important}
+.userbar{display:flex;justify-content:flex-end;align-items:center;gap:10px;font-size:.92rem;color:var(--muted);margin-bottom:8px}
+.userbar img{width:28px;height:28px;border-radius:50%}
