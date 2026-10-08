@@ -131,7 +131,7 @@ function showTab(t) {
   if (!estAdmin() && (t === "cat" || t === "reg")) t = "perm";
   const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", ctr: "viewCtr", cat: "viewCat", reg: "viewReg" };
   ["viewPerm", "viewHist", "viewStock", "viewCtr", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
-  if (t === "ctr") { if (estAdmin()) { majLieuxContrats(); majImagesContrats(); } chargerSuivi(); }
+  if (t === "ctr") { if (estAdmin()) majLieuxContrats(); chargerSuivi(); }
   if (t === "stock") renderStock();
   [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["ctr", "tabCtr"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
@@ -843,10 +843,8 @@ function renderStock() {
 ["sClient", "sItem"].forEach(id => $(id).oninput = renderStock);
 
 /* ---------- Contrats d'exportation (admin) ---------- */
-// Images : Supabase Storage, bucket « contrats », dossier « modeles » (<slug>-<taille>.jpg)
-// Ajout depuis le site : page Contrats d'exportation > « Images des contrats » (admin)
-const IMG_CONTRATS = SUPABASE_URL + "/storage/v1/object/public/contrats/modeles/";
-const imgContrat = c => IMG_CONTRATS + c.slug + "-" + c.taille + ".jpg";
+// Images : dossier contrats/ du site (<slug>-<taille>.jpg)
+const imgContrat = c => `contrats/${c.slug}-${c.taille}.jpg`;
 const COMPAGNIES = [
   { slug: "brasserie",  nom: "Brasserie Noire-Bruyère", contrats: {
       petit: { prix: 4000,  lignes: ["Bière x 200", "Vin x 100", "Hydromel x 30"] },
@@ -992,9 +990,8 @@ const ANGLES = [-8, 6, -4, 9, -10, 5];          // inclinaison du sceau, comme u
 const SCEAU_Y = 0.835, SCEAU_L = 0.62;          // centre (hauteur) et largeur du sceau dans un contrat
 const chargerImage = src => new Promise((ok, ko) => {
   const im = new Image();
-  im.crossOrigin = "anonymous";            // images Supabase : nécessaire pour assembler l'image
   im.onload = () => ok(im);
-  im.onerror = () => ko(new Error("image introuvable : " + src.split("/").pop() + " (à déposer dans « Images des contrats »)"));
+  im.onerror = () => ko(new Error("image introuvable : " + src.split("/").pop() + ""));
   im.src = src;
 });
 
@@ -1058,34 +1055,6 @@ $("ctrEnvoi").onclick = async () => {
   } finally {
     $("ctrEnvoi").disabled = false;
   }
-};
-
-/* ---------- Images des contrats (admin) : dépôt dans Supabase, plus besoin de GitHub ---------- */
-async function majImagesContrats() {
-  const { data, error } = await sb.storage.from("contrats").list("modeles", { limit: 1000 });
-  if (error) return flash($("imgMsg"), "Liste des images indisponible : " + error.message + " (as-tu relancé 17_contrats.sql ?)", false);
-  const presentes = new Set((data || []).map(f => f.name));
-  const attendues = COMPAGNIES.flatMap(c => ["petit", "moyen", "gros"].map(t => `${c.slug}-${t}.jpg`));
-  const manque = attendues.filter(n => !presentes.has(n));
-  $("imgEtat").innerHTML = manque.length
-    ? `⚠ <b>${manque.length}</b> image(s) manquante(s) sur ${attendues.length} : <span class="hint">${manque.map(esc).join(", ")}</span>`
-    : `✔ Les ${attendues.length} images des ${COMPAGNIES.length} compagnies sont en place.`;
-}
-$("imgDepot").onchange = async () => {
-  const fichiers = [...$("imgDepot").files];
-  if (!fichiers.length) return;
-  let ok = 0; const ko = [];
-  for (const f of fichiers) {
-    const nom = f.name.toLowerCase().replace(/\s*\(\d+\)(?=\.jpe?g$)/, "").replace(/\.jpeg$/, ".jpg");
-    if (!/^[a-z0-9-]+-(petit|moyen|gros)\.jpg$/.test(nom)) { ko.push(f.name + " (nom invalide)"); continue; }
-    $("imgMsg").className = "msg"; $("imgMsg").textContent = `Envoi ${ok + ko.length + 1} / ${fichiers.length}…`; $("imgMsg").style.display = "block";
-    const { error } = await sb.storage.from("contrats").upload("modeles/" + nom, f, { contentType: "image/jpeg", upsert: true });
-    if (error) ko.push(f.name + " (" + error.message + ")"); else ok++;
-  }
-  $("imgDepot").value = "";
-  $("imgMsg").style.display = "";
-  flash($("imgMsg"), `${ok} image(s) déposée(s)` + (ko.length ? ` — refusées : ${ko.join(", ")}` : " ✔"), !ko.length);
-  majImagesContrats();
 };
 
 /* ---------- Contrats envoyés, par ville (admin : toutes ; intendant : sa zone) ---------- */
@@ -1253,7 +1222,7 @@ function demarrer() {
   $("userName").textContent = PROFIL?.nom || "";
   $("userRole").textContent = estAdmin() ? "Administrateur" : "Intendant";
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
-  $("tabCat").hidden = $("tabReg").hidden = $("ctrTirage").hidden = $("ctrImages").hidden = !estAdmin();
+  $("tabCat").hidden = $("tabReg").hidden = $("ctrTirage").hidden = !estAdmin();
   $("tabCtr").hidden = false;
   $("sIntWrap").hidden = !estAdmin();
   $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
