@@ -1024,6 +1024,7 @@ function renderSuivi() {
             <button type="button" class="btn primary small" data-enr>Enregistrer et mettre à jour Discord</button>
             <button type="button" class="btn small" data-annul>Annuler</button>
           </div>
+          ${estAdmin() ? `<div class="row suivi-suppr"><button type="button" class="btn small" data-suppr>Supprimer cet envoi (site + message Discord)</button></div>` : ""}
         </div>`;
       }).join("")}
     </details>`;
@@ -1043,6 +1044,14 @@ function renderSuivi() {
     });
     bloc.querySelector("[data-annul]").onclick = renderSuivi;
     bloc.querySelector("[data-enr]").onclick = () => enregistrerSuivi(bloc, e);
+    const suppr = bloc.querySelector("[data-suppr]");
+    if (suppr) suppr.onclick = async () => {
+      if (!await confirmer(`Supprimer cet envoi de ${e.lieu} ? Le message Discord sera supprimé aussi.`)) return;
+      suppr.disabled = true;
+      const { error } = await sb.rpc("supprimer_contrats", { envoi: e.id });
+      flash($("suiviMsg"), error ? "Suppression impossible : " + error.message : "Envoi supprimé ✔", !error);
+      await chargerSuivi();
+    };
   });
 }
 async function enregistrerSuivi(bloc, e) {

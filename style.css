@@ -183,3 +183,4 @@ select:disabled{opacity:.75;cursor:not-allowed}
 .suivi-ctr.fait .ctr-img > img:first-child{border-color:var(--ok)}
 .suivi-actions{margin-top:12px}
 .suivi-actions[hidden]{display:none}
+.suivi-suppr{margin-top:10px;justify-content:flex-end}
