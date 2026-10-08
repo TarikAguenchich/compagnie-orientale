@@ -834,14 +834,8 @@ function renderComptes() {
   const libRole = { admin: "Administrateur", intendant: "Intendant" };
   $("regComptes").innerHTML = COMPTES.length ? `<table><tbody>${COMPTES.map(c => `<tr class="reg-row"><td><b>${esc(c.nom || "?")}</b><br>
     <span class="hint">${c.role ? libRole[c.role] : "Aucun rôle (accès refusé)"} · vérifié le ${c.verifie_le ? new Date(c.verifie_le).toLocaleString("fr-FR") : "—"}</span></td>
-    <td class="reg-lien"><select data-compte="${c.id}" title="Intendant rattaché">${optionsIntendants(c.intendant_id).replace("— aucun —", "— non rattaché —")}</select></td></tr>`).join("")}</tbody></table>`
+    <td class="reg-lien hint">${c.intendant_id ? "Intendant : <b>" + esc(nomIntendant(c.intendant_id) || "?") + "</b>" : (c.role === "intendant" ? "⚠ pas encore d'intendant (reconnexion)" : "")}</td></tr>`).join("")}</tbody></table>`
     : '<p class="empty">Personne ne s\'est encore connecté.</p>';
-  $("regComptes").querySelectorAll("[data-compte]").forEach(sel => sel.onchange = async () => {
-    const { error } = await sb.rpc("lier_compte", { compte: sel.dataset.compte, intendant: sel.value ? Number(sel.value) : null });
-    if (error) return flash($("rCptMsg"), "Non enregistré : " + error.message, false);
-    flash($("rCptMsg"), "Rattachement enregistré.", true);
-    chargerComptes();
-  });
 }
 
 /* ---------- Connexion Discord ---------- */
