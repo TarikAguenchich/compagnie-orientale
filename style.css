@@ -165,8 +165,13 @@ select:disabled{opacity:.75;cursor:not-allowed}
 .ctr-gros img{border-color:#9b2c22}.ctr-moyen img{border-color:var(--warn)}.ctr-petit img{border-color:#d4a843}
 
 /* Contrats envoyés : sceaux des villes */
-.suivi{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
-.suivi:first-child{border-top:0;margin-top:0;padding-top:0}
+.ville-suivi{border:1px solid var(--line);border-radius:6px;margin-top:10px;background:var(--bg)}
+.ville-suivi > summary{cursor:pointer;padding:12px 14px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font-family:Cinzel,serif;font-size:1.05rem}
+.ville-suivi > summary .hint{font-family:inherit;font-size:.8rem}
+.ville-suivi[open] > summary{border-bottom:1px solid var(--line)}
+.suivi{padding:14px;border-top:1px solid var(--line)}
+.ville-suivi > summary + .suivi{border-top:0}
+.suivi.accompli{opacity:.75}
 .suivi-tete{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:10px}
 .suivi-ctr{cursor:pointer;grid-template-rows:auto 1fr}
 .suivi-cap{display:block;font-size:.85rem;line-height:1.3;height:5.3em;overflow:hidden}
@@ -176,5 +181,5 @@ select:disabled{opacity:.75;cursor:not-allowed}
 .ctr .ctr-img .sceau{position:absolute;left:50%;top:83.5%;width:62%;height:auto;aspect-ratio:auto;border:0;border-radius:0;object-fit:contain;
   transform:translate(-50%,-50%) rotate(var(--a,0deg));filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));pointer-events:none}
 .suivi-ctr.fait .ctr-img > img:first-child{border-color:var(--ok)}
-.suivi-actions{margin-top:12px;align-items:flex-end}
-.suivi-actions > div{flex:1 1 200px}
+.suivi-actions{margin-top:12px}
+.suivi-actions[hidden]{display:none}

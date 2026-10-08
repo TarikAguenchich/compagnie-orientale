@@ -915,12 +915,11 @@ const chargerImage = src => new Promise((ok, ko) => {
 });
 
 // Les contrats assemblés côte à côte dans une seule image (même ordre que l'aperçu),
-// avec le sceau de la ville sur ceux réalisés (realises = { "3": { ville }, … })
-async function imageContrats(contrats, realises = {}) {
+// avec le sceau de la ville sur ceux réalisés (realises = { "3": {…}, … })
+async function imageContrats(contrats, realises = {}, ville = "") {
   const imgs = await Promise.all(contrats.map(c => chargerImage(`contrats/${c.slug}-${c.taille}.jpg`)));
   const sceaux = await Promise.all(contrats.map((c, i) => {
-    const r = realises[String(i + 1)];
-    return r && aSceau(r.ville) ? chargerImage(`sceaux/${cleVille(r.ville)}.png`) : null;
+    return realises[String(i + 1)] && aSceau(ville) ? chargerImage(`sceaux/${cleVille(ville)}.png`) : null;
   }));
   const h = Math.min(1100, Math.max(...imgs.map(i => i.naturalHeight))), ecart = 12, marge = 12;   // image allégée pour Discord
   const largeurs = imgs.map(i => Math.round(i.naturalWidth * h / i.naturalHeight));
@@ -977,68 +976,84 @@ $("ctrEnvoi").onclick = async () => {
   }
 };
 
-/* ---------- Contrats envoyés : sceau des villes (admin + intendants) ---------- */
-let ENVOIS = [], VILLES_SCEAU = [];
+/* ---------- Contrats envoyés, par ville (admin : toutes ; intendant : sa zone) ---------- */
+// Cocher = réalisé (sceau de la ville sur le contrat). Tout coché = accompli, retiré 7 jours après.
+let ENVOIS = [];
+const VILLES_OUVERTES = new Set();
 const contratsDe = e => (e.contrats || []).filter(c => c.slug);
+const JOUR = 864e5;
 async function chargerSuivi() {
-  const [env, vil] = await Promise.all([
-    sb.from("contrats_envois").select("id, lieu, contrats, envoye_le, realises, version")
-      .not("message_id", "is", null).order("envoye_le", { ascending: false }).limit(20),
-    sb.rpc("villes_sceau"),
-  ]);
-  if (env.error) return flash($("suiviMsg"), "Contrats indisponibles : " + env.error.message + " (as-tu lancé 17_contrats.sql ?)", false);
-  ENVOIS = env.data || [];
-  VILLES_SCEAU = (vil.data || []).map(v => v.ville).filter(aSceau);
+  const depuis = new Date(Date.now() - 7 * JOUR).toISOString();
+  const { data, error } = await sb.from("contrats_envois").select("id, lieu, contrats, envoye_le, realises, version, accompli_le")
+    .not("message_id", "is", null).or(`accompli_le.is.null,accompli_le.gt.${depuis}`)
+    .order("envoye_le", { ascending: false }).limit(200);
+  if (error) return flash($("suiviMsg"), "Contrats indisponibles : " + error.message + " (as-tu lancé 17_contrats.sql ?)", false);
+  ENVOIS = data || [];
   renderSuivi();
 }
-function renderSuivi() {
-  if (!ENVOIS.length) { $("ctrSuivi").innerHTML = `<p class="hint">Aucun contrat envoyé pour l'instant.</p>`; return; }
-  const options = VILLES_SCEAU.length
-    ? VILLES_SCEAU.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("")
-    : `<option value="">— aucune ville avec un sceau —</option>`;
-  $("ctrSuivi").innerHTML = ENVOIS.map(e => {
-    const cs = contratsDe(e), rea = e.realises || {};
-    const nb = cs.filter((c, i) => rea[String(i + 1)]).length;
-    return `<div class="suivi" data-envoi="${e.id}">
-      <div class="suivi-tete"><b>${esc(e.lieu)}</b><span class="hint">${new Date(e.envoye_le).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>
-        <span class="tag ${nb === cs.length ? "ok" : ""}">${nb} / ${cs.length} réalisé${nb > 1 ? "s" : ""}</span></div>
-      <div class="ctr-grille">${cs.map((c, i) => {
-        const n = i + 1, r = rea[String(n)];
-        return `<label class="ctr suivi-ctr${r ? " fait" : ""}">
-          <span class="suivi-cap"><input type="checkbox" value="${n}" data-fait="${r ? 1 : 0}"> <b>${n}.</b> ${esc(c.nom)}
-            <span class="hint">${r ? "✅ Réalisé par <b>" + esc(r.ville) + "</b>" : fmt(c.prix)}</span></span>
-          <span class="ctr-img"><img src="contrats/${c.slug}-${c.taille}.jpg" alt="${esc(c.nom)}" loading="lazy">${r && aSceau(r.ville)
-            ? `<img class="sceau" src="sceaux/${cleVille(r.ville)}.png" alt="Sceau de ${esc(r.ville)}" style="--a:${ANGLES[i % ANGLES.length]}deg">` : ""}</span>
-        </label>`;
-      }).join("")}</div>
-      <div class="row suivi-actions">
-        <div><label>Réalisé par</label><select data-ville>${options}</select></div>
-        <button type="button" class="btn primary small" data-sceau="poser" ${VILLES_SCEAU.length ? "" : "disabled"}>Apposer le sceau sur les contrats cochés</button>
-        <button type="button" class="btn small" data-sceau="retirer">Retirer le sceau</button>
-      </div>
-    </div>`;
-  }).join("");
-  $("ctrSuivi").querySelectorAll("[data-sceau]").forEach(b => b.onclick = () => majSceaux(b));
+function sceauHtml(ville, i) {
+  return aSceau(ville) ? `<img class="sceau" src="sceaux/${cleVille(ville)}.png" alt="Sceau de ${esc(ville)}" style="--a:${ANGLES[i % ANGLES.length]}deg">` : "";
 }
-async function majSceaux(btn) {
-  const bloc = btn.closest(".suivi"), e = ENVOIS.find(x => String(x.id) === bloc.dataset.envoi);
-  if (!e) return;
-  const poser = btn.dataset.sceau === "poser";
-  const ville = poser ? bloc.querySelector("[data-ville]").value : null;
-  const numeros = [...bloc.querySelectorAll("input[type=checkbox]:checked")]
-    .filter(c => (c.dataset.fait === "1") !== poser).map(c => Number(c.value));
-  if (!numeros.length) return flash($("suiviMsg"), poser ? "Coche au moins un contrat pas encore réalisé." : "Coche au moins un contrat déjà réalisé.", false);
-  if (poser && !ville) return flash($("suiviMsg"), "Choisis la ville qui a réalisé les contrats.", false);
-  const liste = numeros.map(n => "n° " + n).join(", ");
-  if (!await confirmer(poser ? `Apposer le sceau de ${ville} sur les contrats ${liste} (${e.lieu}) ?` : `Retirer le sceau des contrats ${liste} (${e.lieu}) ?`)) return;
-  bloc.querySelectorAll("button").forEach(b => b.disabled = true);
+function renderSuivi() {
+  $("ctrSuivi").querySelectorAll("details").forEach(d => d.open ? VILLES_OUVERTES.add(d.dataset.ville) : VILLES_OUVERTES.delete(d.dataset.ville));
+  if (!ENVOIS.length) { $("ctrSuivi").innerHTML = `<p class="hint">Aucun contrat en cours.</p>`; return; }
+  const villes = [...new Set(ENVOIS.map(e => e.lieu))].sort((a, b) => a.localeCompare(b, "fr"));
+  if (villes.length === 1) VILLES_OUVERTES.add(villes[0]);
+  const dateCourte = d => new Date(d).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+  $("ctrSuivi").innerHTML = villes.map(v => {
+    const envois = ENVOIS.filter(e => e.lieu === v).sort((a, b) => !!a.accompli_le - !!b.accompli_le);   // accomplis en dernier
+    const enCours = envois.filter(e => !e.accompli_le).length, finis = envois.length - enCours;
+    const restants = envois.reduce((s, e) => s + contratsDe(e).length - Object.keys(e.realises || {}).length, 0);
+    return `<details class="ville-suivi" data-ville="${esc(v)}" ${VILLES_OUVERTES.has(v) ? "open" : ""}>
+      <summary><b>${esc(v)}</b><span class="hint">${enCours} envoi${enCours > 1 ? "s" : ""} en cours · ${restants} contrat${restants > 1 ? "s" : ""} à remplir${finis ? ` · ${finis} accompli${finis > 1 ? "s" : ""}` : ""}</span></summary>
+      ${envois.map(e => {
+        const cs = contratsDe(e), rea = e.realises || {}, nb = Object.keys(rea).length;
+        return `<div class="suivi${e.accompli_le ? " accompli" : ""}" data-envoi="${e.id}">
+          <div class="suivi-tete"><span>Envoyé le ${dateCourte(e.envoye_le)}</span>
+            <span class="tag ${e.accompli_le ? "ok" : ""}">${e.accompli_le ? "✅ Accompli" : `${nb} / ${cs.length} réalisé${nb > 1 ? "s" : ""}`}</span>
+            ${e.accompli_le ? `<span class="hint">disparaît le ${new Date(new Date(e.accompli_le).getTime() + 7 * JOUR).toLocaleDateString("fr-FR")}</span>` : ""}</div>
+          <div class="ctr-grille">${cs.map((c, i) => {
+            const n = i + 1, fait = !!rea[String(n)];
+            return `<label class="ctr suivi-ctr${fait ? " fait" : ""}">
+              <span class="suivi-cap"><input type="checkbox" value="${n}" ${fait ? "checked" : ""}> <b>${n}.</b> ${esc(c.nom)}
+                <span class="hint">${fmt(c.prix)}</span></span>
+              <span class="ctr-img"><img src="contrats/${c.slug}-${c.taille}.jpg" alt="${esc(c.nom)}" loading="lazy">${fait ? sceauHtml(e.lieu, i) : ""}</span>
+            </label>`;
+          }).join("")}</div>
+          <div class="row suivi-actions" hidden>
+            <button type="button" class="btn primary small" data-enr>Enregistrer et mettre à jour Discord</button>
+            <button type="button" class="btn small" data-annul>Annuler</button>
+          </div>
+        </div>`;
+      }).join("")}
+    </details>`;
+  }).join("");
+  const box = $("ctrSuivi");
+  box.querySelectorAll("details").forEach(d => d.ontoggle = () => d.open ? VILLES_OUVERTES.add(d.dataset.ville) : VILLES_OUVERTES.delete(d.dataset.ville));
+  box.querySelectorAll(".suivi").forEach(bloc => {
+    const e = ENVOIS.find(x => String(x.id) === bloc.dataset.envoi);
+    const modifie = () => bloc.querySelectorAll("input[type=checkbox]").length && [...bloc.querySelectorAll("input[type=checkbox]")].some(c => c.checked !== !!(e.realises || {})[c.value]);
+    bloc.querySelectorAll("input[type=checkbox]").forEach(c => c.onchange = () => {
+      // aperçu immédiat du sceau
+      const lab = c.closest(".suivi-ctr"), img = lab.querySelector(".ctr-img");
+      lab.classList.toggle("fait", c.checked);
+      img.querySelector(".sceau")?.remove();
+      if (c.checked) img.insertAdjacentHTML("beforeend", sceauHtml(e.lieu, Number(c.value) - 1));
+      bloc.querySelector(".suivi-actions").hidden = !modifie();
+    });
+    bloc.querySelector("[data-annul]").onclick = renderSuivi;
+    bloc.querySelector("[data-enr]").onclick = () => enregistrerSuivi(bloc, e);
+  });
+}
+async function enregistrerSuivi(bloc, e) {
+  const faits = [...bloc.querySelectorAll("input[type=checkbox]:checked")].map(c => Number(c.value));
+  bloc.querySelectorAll("button, input").forEach(b => b.disabled = true);
   try {
-    const rea = { ...(e.realises || {}) };
-    numeros.forEach(n => { if (poser) rea[String(n)] = { ville }; else delete rea[String(n)]; });
-    const url = await deposerImage(e.lieu, await imageContrats(contratsDe(e), rea));
-    const { error } = await sb.rpc("realiser_contrats", { envoi: e.id, numeros, ville, version_vue: e.version, image_url: url });
+    const rea = Object.fromEntries(faits.map(n => [String(n), true]));
+    const url = await deposerImage(e.lieu, await imageContrats(contratsDe(e), rea, e.lieu));
+    const { error } = await sb.rpc("maj_contrats", { envoi: e.id, faits, version_vue: e.version, image_url: url });
     if (error) throw new Error(error.message);
-    flash($("suiviMsg"), poser ? `Sceau de ${ville} apposé, message Discord mis à jour ✔` : "Sceau retiré, message Discord mis à jour ✔", true);
+    flash($("suiviMsg"), faits.length === contratsDe(e).length ? `Contrats de ${e.lieu} accomplis ✔ (ils disparaîtront dans 7 jours)` : "Enregistré, message Discord mis à jour ✔", true);
   } catch (err) {
     flash($("suiviMsg"), "Impossible : " + err.message, false);
   } finally {
