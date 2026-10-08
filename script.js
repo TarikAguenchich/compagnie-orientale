@@ -909,7 +909,7 @@ async function imageContrats(contrats) {
     im.onerror = () => ko(new Error("image introuvable : contrats/" + c.slug + "-" + c.taille + ".jpg"));
     im.src = `contrats/${c.slug}-${c.taille}.jpg`;
   })));
-  const h = Math.max(...imgs.map(i => i.naturalHeight)), ecart = 14, marge = 14;
+  const h = Math.min(1100, Math.max(...imgs.map(i => i.naturalHeight))), ecart = 12, marge = 12;   // image allégée pour Discord
   const largeurs = imgs.map(i => Math.round(i.naturalWidth * h / i.naturalHeight));
   const cv = document.createElement("canvas");
   cv.width = largeurs.reduce((s, w) => s + w, 0) + ecart * (imgs.length - 1) + marge * 2;
@@ -918,7 +918,7 @@ async function imageContrats(contrats) {
   ctx.fillStyle = "#1b1a22"; ctx.fillRect(0, 0, cv.width, cv.height);
   let x = marge;
   imgs.forEach((im, i) => { ctx.drawImage(im, x, marge, largeurs[i], h); x += largeurs[i] + ecart; });
-  return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.88));
+  return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.82));
 }
 
 $("ctrEnvoi").onclick = async () => {
