@@ -145,6 +145,8 @@ INSTITUTIONS.forEach(n => $("institutions").append(new Option(n)));
 const remplir = (sel, noms, vide) => { sel.innerHTML = ""; if (!noms.length) sel.add(new Option(vide, "")); noms.forEach(n => sel.add(new Option(n, n))); };
 const intendantCourant = () => REG.intendants.find(i => String(i.id) === String(state.intendantId));
 
+const lieuxDe = it => REG.chatelleries.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
+const coffresDe = it => REG.coffres.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
 // Listes de la permanence : châtelleries et coffres de l'intendant choisi
 function majPermanence() {
   const selI = $("intendant");
@@ -159,10 +161,16 @@ function majPermanence() {
   else if (!intendantCourant() && REG.intendants.length) state.intendantId = String(REG.intendants[0].id);
   selI.value = state.intendantId;
   selI.disabled = !estAdmin();
-  $("nonLie").hidden = estAdmin() || !ROLE || !!intendantCourant();
+  // Bandeau seulement s'il y a vraiment un blocage (le style inline ne dépend pas du CSS)
+  const bandeau = !ROLE || estAdmin() ? ""
+    : !intendantCourant() ? "Ton intendant n'a pas encore été créé : déconnecte-toi puis reconnecte-toi avec Discord."
+    : !lieuxDe(intendantCourant()).length || !coffresDe(intendantCourant()).length
+      ? `Aucune ${!lieuxDe(intendantCourant()).length ? "châtellerie" : ""}${!lieuxDe(intendantCourant()).length && !coffresDe(intendantCourant()).length ? " ni aucun " : ""}${!coffresDe(intendantCourant()).length ? "coffre" : ""} ne t'est encore attribué : un administrateur doit le faire dans Réglages. En attendant, tu peux préparer tes commandes mais pas les transmettre.`
+      : "";
+  $("nonLie").textContent = bandeau;
+  $("nonLie").style.display = bandeau ? "block" : "none";
   const it = intendantCourant();
-  const lieux = REG.chatelleries.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
-  const coffres = REG.coffres.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
+  const lieux = lieuxDe(it), coffres = coffresDe(it);
   remplir($("lieu"), lieux, "— aucune châtellerie —");
   remplir($("coffre"), coffres, "— aucun coffre —");
   if (lieux.includes(state.lieu)) $("lieu").value = state.lieu;
