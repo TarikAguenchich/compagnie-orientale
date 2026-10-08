@@ -128,11 +128,12 @@ function confirmer(txt) {
 /* ---------- Onglets ---------- */
 let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
-  if (!estAdmin() && (t === "cat" || t === "reg")) t = "perm";
-  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", cat: "viewCat", reg: "viewReg" };
-  ["viewPerm", "viewHist", "viewStock", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
+  if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr")) t = "perm";
+  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", ctr: "viewCtr", cat: "viewCat", reg: "viewReg" };
+  ["viewPerm", "viewHist", "viewStock", "viewCtr", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
+  if (t === "ctr") majLieuxContrats();
   if (t === "stock") renderStock();
-  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
+  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["ctr", "tabCtr"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
   if (t === "cat") renderCat();
   if (t === "reg") renderReg();
@@ -142,6 +143,7 @@ $("tabPerm").onclick = () => showTab("perm");
 $("tabHist").onclick = () => showTab("hist");
 $("tabEnc").onclick = () => showTab("enc");
 $("tabStock").onclick = () => showTab("stock");
+$("tabCtr").onclick = () => showTab("ctr");
 $("tabCat").onclick = () => showTab("cat");
 $("tabReg").onclick = () => showTab("reg");
 
@@ -501,7 +503,7 @@ function majFiltres() {
     sel.value = garde;
   });
 }
-$("fInt").onchange = $("fLieu").onchange = $("fClient").oninput = renderHist;
+$("fInt").onchange = $("fLieu").onchange = $("fClient").oninput = $("fItem").oninput = renderHist;
 
 const toutPaye = p => p.orders.length > 0 && p.orders.every(o => o.payeLe);
 function renderHist() {
@@ -513,10 +515,12 @@ function renderHist() {
     ? (estAdmin()
       ? "Transmise → Livré (tu as remis les items à l'intendant : il est pingé sur Discord, ils entrent dans son stock) → Payé (remis au client par l'intendant). Quand tous les clients ont payé, la permanence passe dans l'historique."
       : "Transmise → Livré (coché par un administrateur quand il te remet les items, tu es pingé sur Discord) → Payé (à cocher quand tu as remis au client). Quand tous les clients ont payé, la permanence passe dans l'historique.")
-    : "Permanences entièrement livrées et payées.") + (estAdmin() ? " Tu vois celles de tous les intendants." : " Tu ne vois que celles que tu as clôturées.");
-  const fi = $("fInt").value, fl = $("fLieu").value, fc = $("fClient").value.trim().toLowerCase();
+    : "Permanences entièrement livrées et payées.") + (estAdmin() ? " Tu vois celles de tous les intendants." : " Tu vois celles de ta zone.");
+  const fi = estAdmin() ? $("fInt").value : "", fl = estAdmin() ? $("fLieu").value : "";
+  const fc = sansAccent($("fClient").value.trim()), fa = sansAccent($("fItem").value.trim());
   const list = base.filter(p => (!fi || p.intendant === fi) && (!fl || p.lieu === fl) &&
-    (!fc || p.orders.some(o => o.client.toLowerCase().includes(fc))));
+    (!fc || p.orders.some(o => sansAccent(o.client).includes(fc))) &&
+    (!fa || p.orders.some(o => o.items.some(x => sansAccent(lib(x)).includes(fa)))));
   const box = $("hist");
   if (!base.length) { box.innerHTML = `<p class="empty">${MODE === "enc" ? "Aucune commande en cours : tout a été payé." : "Aucune permanence entièrement payée pour l'instant."}</p>`; return; }
   if (!list.length) { box.innerHTML = '<p class="empty">Aucune permanence ne correspond aux filtres.</p>'; return; }
@@ -838,6 +842,73 @@ function renderStock() {
 ["sInt", "sLieu"].forEach(id => $(id).onchange = renderStock);
 ["sClient", "sItem"].forEach(id => $(id).oninput = renderStock);
 
+/* ---------- Contrats d'exportation (admin) ---------- */
+// Images : dossier contrats/ du site (<slug>-<taille>.jpg)
+const COMPAGNIES = [
+  { slug: "brasserie",  nom: "Brasserie Noire-Bruyère", contrats: {
+      petit: { prix: 4000,  lignes: ["Bière x 200", "Vin x 100", "Hydromel x 30"] },
+      moyen: { prix: 12000, lignes: ["Bière x 600", "Vin x 300", "Hydromel x 100"] },
+      gros:  { prix: 24000, lignes: ["Bière x 1200", "Vin x 600", "Hydromel x 200"] } } },
+  { slug: "marchands",  nom: "Bureau des marchands Impériaux", contrats: {
+      petit: { prix: 3000,  lignes: ["Cuir x 300", "Peau d'Ours x 15", "Peau de loup x 15", "Peau de renard x 15"] },
+      moyen: { prix: 12000, lignes: ["Cuir x 1200", "Peau d'Ours x 60", "Peau de loup x 60", "Peau de renard x 60"] },
+      gros:  { prix: 24000, lignes: ["Cuir x 2400", "Peau d'Ours x 120", "Peau de loup x 120", "Peau de renard x 120"] } } },
+  { slug: "leyawiin",   nom: "Caravane de Leyawiin", contrats: {
+      petit: { prix: 4000,  lignes: ["Lingot d'Acier x 200"] },
+      moyen: { prix: 15000, lignes: ["Lingot d'Acier x 750"] },
+      gros:  { prix: 30000, lignes: ["Lingot d'Acier x 1500"] } } },
+  { slug: "corberoc",   nom: "Cité de Corberoc", contrats: {
+      petit: { prix: 3250,  lignes: ["Pioche x 25", "Hache de Bucheron x 25", "Clef x 25", "Petit Bois x 250"] },
+      moyen: { prix: 14000, lignes: ["Pioche x 100", "Hache de Bucheron x 100", "Clef x 100", "Petit bois x 250"] },
+      gros:  { prix: 28000, lignes: ["Pioche x 200", "Hache de Bucheron x 200", "Clef x 200", "Petit bois x 2000"] } } },
+  { slug: "cote-dor",   nom: "Compagnie commerciale de la côte d'Or", contrats: {
+      petit: { prix: 3500,  lignes: ["Peau de Smilodon x 200", "Peau de Cerfs x 200", "Défense de Horqueurs x 250"] },
+      moyen: { prix: 12000, lignes: ["Peau de Smilodon x 500", "Peau de Cerfs x 500", "Défense de Horqueurs x 750"] },
+      gros:  { prix: 24000, lignes: ["Peau de Smilodon x 1000", "Peau de Cerfs x 1000", "Défense de Horqueurs x 1500"] } } },
+  { slug: "chendinhal", nom: "Comptoir de Chendinhal", contrats: {
+      petit: { prix: 2500,  lignes: ["Meule de Fromage x 100", "Tarte aux pommes x 100"] },
+      moyen: { prix: 10000, lignes: ["Meule de Fromage x 400", "Tarte aux pommes x 400"] },
+      gros:  { prix: 20000, lignes: ["Meule de Fromage x 800", "Tarte aux pommes x 800"] } } },
+];
+const TIRAGE = ["gros", "moyen", "moyen", "petit", "petit", "petit"];
+const LIB_TAILLE = { gros: "Gros contrat", moyen: "Contrat moyen", petit: "Petit contrat" };
+let tirage = null;
+
+function majLieuxContrats() {
+  const sel = $("ctrLieu"), garde = sel.value;
+  sel.innerHTML = REG.chatelleries.map(c => `<option>${esc(c.nom)}</option>`).join("");
+  if (garde) sel.value = garde;
+}
+function genererContrats() {
+  // une compagnie différente par contrat, tirée au hasard
+  const melange = COMPAGNIES.slice();
+  for (let i = melange.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [melange[i], melange[j]] = [melange[j], melange[i]]; }
+  tirage = { lieu: $("ctrLieu").value, contrats: TIRAGE.map((taille, i) => {
+    const c = melange[i % melange.length];
+    return { slug: c.slug, taille, nom: c.nom, prix: c.contrats[taille].prix, lignes: c.contrats[taille].lignes };
+  }) };
+  $("ctrTitre").textContent = `Aperçu — ${tirage.lieu}`;
+  $("ctrListe").innerHTML = tirage.contrats.map(c => `<figure class="ctr ctr-${c.taille}">
+      <figcaption><b>${LIB_TAILLE[c.taille]}</b><span class="hint">${esc(c.nom)} · ${fmt(c.prix)}</span></figcaption>
+      <img src="contrats/${c.slug}-${c.taille}.jpg" alt="${esc(c.nom)} — ${LIB_TAILLE[c.taille]}" loading="lazy">
+    </figure>`).join("");
+  $("ctrApercu").hidden = false;
+  $("ctrMsg").className = "msg";
+}
+$("ctrGen").onclick = () => { if (!$("ctrLieu").value) return flash($("ctrMsg"), "Aucune châtellerie (voir Réglages).", false); genererContrats(); $("ctrApercu").scrollIntoView({ behavior: "smooth" }); };
+$("ctrRegen").onclick = genererContrats;
+$("ctrEnvoi").onclick = async () => {
+  if (!tirage) return;
+  if (!await confirmer(`Envoyer ces ${tirage.contrats.length} contrats d'exportation dans le salon de ${tirage.lieu} ?`)) return;
+  $("ctrEnvoi").disabled = true;
+  const { error } = await sb.rpc("envoyer_contrats", { lieu: tirage.lieu, contrats: tirage.contrats });
+  $("ctrEnvoi").disabled = false;
+  if (error) return flash($("ctrMsg"), "Envoi impossible : " + error.message, false);
+  flash($("ctrMsg"), `Contrats envoyés sur Discord pour ${tirage.lieu} ✔`, true);
+  $("ctrApercu").hidden = true; tirage = null;
+  $("ctrMsg").scrollIntoView({ behavior: "smooth" });
+};
+
 /* ---------- Comptes (Réglages, admin) ---------- */
 let COMPTES = [];
 async function chargerComptes() {
@@ -908,8 +979,9 @@ function demarrer() {
   $("userName").textContent = PROFIL?.nom || "";
   $("userRole").textContent = estAdmin() ? "Administrateur" : "Intendant";
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
-  $("tabCat").hidden = $("tabReg").hidden = !estAdmin();
+  $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = !estAdmin();
   $("sIntWrap").hidden = !estAdmin();
+  $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
   if (demarre) return; demarre = true;
   majPermanence(); majFiltres();
   chargerForm(state.draft);

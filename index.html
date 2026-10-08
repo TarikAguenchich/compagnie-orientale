@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Permanence — Compagnie</title>
-<link rel="icon" type="image/png" href="logo.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -34,6 +34,7 @@
     <button type="button" id="tabEnc">Commandes en cours <span class="badge" id="nbEnc" hidden>0</span></button>
     <button type="button" id="tabHist">Historique</button>
     <button type="button" id="tabStock">Stock</button>
+    <button type="button" id="tabCtr" hidden>Contrats d'exportation</button>
     <button type="button" id="tabCat" hidden>Catalogue</button>
     <button type="button" id="tabReg" hidden>Réglages</button>
   </nav>
@@ -109,10 +110,11 @@
   <!-- Commandes en cours / Historique (même vue, filtrée sur « tout livré ») -->
   <div id="viewHist" hidden>
     <p class="hint" id="histIntro" style="margin-top:0"></p>
-    <div class="filters">
-      <div><label for="fInt">Intendant</label><select id="fInt"><option value="">Tous</option></select></div>
-      <div><label for="fLieu">Châtellerie</label><select id="fLieu"><option value="">Toutes</option></select></div>
-      <div><label for="fClient">Client</label><input id="fClient" placeholder="Nom du client"></div>
+    <div class="filters filters4">
+      <div id="fIntWrap"><label for="fInt">Intendant</label><select id="fInt"><option value="">Tous</option></select></div>
+      <div id="fLieuWrap"><label for="fLieu">Châtellerie</label><select id="fLieu"><option value="">Toutes</option></select></div>
+      <div><label for="fClient">Client</label><input id="fClient" placeholder="Rechercher un client"></div>
+      <div><label for="fItem">Article</label><input id="fItem" placeholder="Rechercher un article"></div>
     </div>
     <div class="msg" id="histMsg" style="margin:0 0 12px"></div>
     <div id="hist"></div>
@@ -130,6 +132,27 @@
     <div class="msg" id="stockMsg" style="margin:0 0 12px"></div>
     <div class="card"><h2>En stock <span class="badge" id="stockNb">0</span></h2><div id="stockTotal"></div></div>
     <div class="card"><h2>Détail par châtellerie et client</h2><div id="stockDetail"></div></div>
+  </div>
+
+  <!-- Contrats d'exportation (admin) -->
+  <div id="viewCtr" hidden>
+    <div class="card">
+      <h2>Contrats d'exportation</h2>
+      <p class="hint" style="margin-top:0">Tirage au sort pour une châtellerie : <b>1 gros</b>, <b>2 moyens</b> et <b>3 petits</b> contrats, une compagnie différente pour chacun. Vérifie l'aperçu, puis confirme pour l'envoyer dans le salon Discord de la châtellerie.</p>
+      <div class="row ctr-barre">
+        <div><label for="ctrLieu">Châtellerie</label><select id="ctrLieu"></select></div>
+        <button type="button" class="btn primary" id="ctrGen">Générer les contrats</button>
+      </div>
+      <div class="msg" id="ctrMsg"></div>
+    </div>
+    <div class="card" id="ctrApercu" hidden>
+      <h2 id="ctrTitre">Aperçu</h2>
+      <div id="ctrListe" class="ctr-grille"></div>
+      <div class="row" style="margin-top:14px">
+        <button type="button" class="btn primary" id="ctrEnvoi">Confirmer et envoyer sur Discord</button>
+        <button type="button" class="btn" id="ctrRegen">Refaire le tirage</button>
+      </div>
+    </div>
   </div>
 
   <!-- Catalogue -->
