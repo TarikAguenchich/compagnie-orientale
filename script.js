@@ -869,6 +869,86 @@ const COMPAGNIES = [
       petit: { prix: 2500,  lignes: ["Meule de Fromage x 100", "Tarte aux pommes x 100"] },
       moyen: { prix: 10000, lignes: ["Meule de Fromage x 400", "Tarte aux pommes x 400"] },
       gros:  { prix: 20000, lignes: ["Meule de Fromage x 800", "Tarte aux pommes x 800"] } } },
+  { slug: "garnison-bruma", nom: "Garnison de Bruma", contrats: {
+      petit: { prix: 2000, lignes: ["Plastron d'Acier x 5", "Bottes d'Acier x 5", "Casque d'Acier x 5", "Gantelets d'Acier x 5"] },
+      moyen: { prix: 10000, lignes: ["Plastron d'Acier x 25", "Bottes d'Acier x 25", "Casque d'Acier x 25", "Gantelets d'Acier x 25"] },
+      gros:  { prix: 20000, lignes: ["Plastron d'Acier x 50", "Bottes d'Acier x 50", "Casque d'Acier x 50", "Gantelets d'Acier x 50"] } } },
+  { slug: "gilane", nom: "Comptoir de Gilane", contrats: {
+      petit: { prix: 3000, lignes: ["Potion de guerrier x 100", "Potion de berserker x 100"] },
+      moyen: { prix: 12000, lignes: ["Potion de guerrier x 400", "Potion de berserker x 400"] },
+      gros:  { prix: 24000, lignes: ["Potion de guerrier x 800", "Potion de berserker x 800"] } } },
+  { slug: "clairetoison", nom: "Comptoir de la famille Clairetoison", contrats: {
+      petit: { prix: 4000, lignes: ["Gourde x 4000"] },
+      moyen: { prix: 12000, lignes: ["Gourde x 12000"] },
+      gros:  { prix: 24000, lignes: ["Gourde x 24000"] } } },
+  { slug: "val-boise", nom: "Comptoir du Val-Boisé", contrats: {
+      petit: { prix: 2500, lignes: ["Viande de Boeuf x 500", "Venaison x 500"] },
+      moyen: { prix: 12500, lignes: ["Viande de Boeuf x 2500", "Venaison x 2500"] },
+      gros:  { prix: 25000, lignes: ["Viande de Boeuf x 5000", "Venaison x 5000"] } } },
+  { slug: "tourbevase", nom: "Comptoir Tourbevase", contrats: {
+      petit: { prix: 4000, lignes: ["Émeraude x 20", "Saphir x 100", "Rubis x 100", "Grenat x 200", "Améthyste x 200"] },
+      moyen: { prix: 12000, lignes: ["Émeraude x 60", "Saphir x 300", "Rubis x 300", "Grenat x 600", "Améthyste x 600"] },
+      gros:  { prix: 24000, lignes: ["Émeraude x 120", "Saphir x 600", "Rubis x 600", "Grenat x 1200", "Améthyste x 600"] } } },
+  { slug: "aubeneuve", nom: "Confédération des Forgerons d'Aubeneuve", contrats: {
+      petit: { prix: 2500, lignes: ["Lingot d'Orichalque x 50"] },
+      moyen: { prix: 10000, lignes: ["Lingot d'Orichalque x 200"] },
+      gros:  { prix: 20000, lignes: ["Lingot d'Orichalque x 400"] } } },
+  { slug: "cyrodiil", nom: "Confrérie de l'Acier de Cyrodiil", contrats: {
+      petit: { prix: 3500, lignes: ["Minerai de Fer x 5000"] },
+      moyen: { prix: 10000, lignes: ["Minerai de Fer x 15000"] },
+      gros:  { prix: 20000, lignes: ["Minerai de Fer x 30000"] } } },
+  { slug: "senchal", nom: "Consortium des Sucreries de Senchal", contrats: {
+      petit: { prix: 3000, lignes: ["Patate x 1250", "Choux x 1250", "Tomate x 1250", "Poireau x 1250"] },
+      moyen: { prix: 15000, lignes: ["Patate x 6250", "Choux x 6250", "Tomate x 6250", "Poireau x 6250"] },
+      gros:  { prix: 30000, lignes: ["Patate x 12500", "Choux x 12500", "Tomate x 12500", "Poireau x 12500"] } } },
+  { slug: "elegance", nom: "Élégance Divine, Tailleur Impérial", contrats: {
+      petit: { prix: 4000, lignes: ["Bottes x 50", "Cape de Fourrure x 25", "Vêtements Nobles x 10"] },
+      moyen: { prix: 12000, lignes: ["Bottes x 150", "Cape de Fourrure x 75", "Vêtements Nobles x 30"] },
+      gros:  { prix: 24000, lignes: ["Bottes x 300", "Cape de Fourrure x 150", "Vêtements Nobles x 60"] } } },
+  { slug: "miniere-bruma", nom: "Guilde Minière de Bruma", contrats: {
+      petit: { prix: 4000, lignes: ["Minerai d'Argent x 1500"] },
+      moyen: { prix: 14000, lignes: ["Minerai d'Argent x 5000"] },
+      gros:  { prix: 28000, lignes: ["Minerai d'Argent x 10000"] } } },
+  { slug: "scorpion", nom: "Les Comptoirs du Scorpion d'Or", contrats: {
+      petit: { prix: 4000, lignes: ["Potion de soin mineur x 300"] },
+      moyen: { prix: 12000, lignes: ["Potion de soin mineur x 900"] },
+      gros:  { prix: 24000, lignes: ["Potion de soin mineur x 1800"] } } },
+  { slug: "alinor", nom: "Maison des Tisserands d'Alinor", contrats: {
+      petit: { prix: 4000, lignes: ["Bobine de Fil x 5000"] },
+      moyen: { prix: 12000, lignes: ["Bobine de Fil x 15000"] },
+      gros:  { prix: 24000, lignes: ["Bobine de Fil x 30000"] } } },
+  { slug: "sentinelle", nom: "Maison Marchande de Sentinelle", contrats: {
+      petit: { prix: 4000, lignes: ["Lingot de Vif Argent x 20"] },
+      moyen: { prix: 20000, lignes: ["Lingot de Vif Argent x 50"] },
+      gros:  { prix: 30000, lignes: ["Lingot de Vif Argent x 150"] } } },
+  { slug: "redoran", nom: "Maison Redoran de Balmora", contrats: {
+      petit: { prix: 2000, lignes: ["Flèche d'Acier x 800", "Arc Commun x 10"] },
+      moyen: { prix: 10000, lignes: ["Flèche d'Acier x 4000", "Arc Commun x 50"] },
+      gros:  { prix: 20000, lignes: ["Flèche d'Acier x 8000", "Arc Commun x 100"] } } },
+  { slug: "telvanni", nom: "Maison Telvanni", contrats: {
+      petit: { prix: 3000, lignes: ["Gemmes spirituelles (vides) x 150"] },
+      moyen: { prix: 13000, lignes: ["Gemmes spirituelles (vides) x 500"] },
+      gros:  { prix: 26000, lignes: ["Gemmes spirituelles (vides) x 1000"] } } },
+  { slug: "chornol", nom: "Marché de Chornol", contrats: {
+      petit: { prix: 3500, lignes: ["Espadon en Acier x 5", "Marteau en Acier x 5", "Hache d'armes en Acier x 5", "Épée en Acier x 5", "Hache en Acier x 5", "Masse en Acier x 5"] },
+      moyen: { prix: 10000, lignes: ["Espadon en Acier x 20", "Marteau en Acier x 20", "Hache d'armes en Acier x 20", "Épée en Acier x 20", "Hache en Acier x 20", "Masse en Acier x 20"] },
+      gros:  { prix: 20000, lignes: ["Espadon en Acier x 40", "Marteau en Acier x 40", "Hache d'armes en Acier x 40", "Épée en Acier x 40", "Hache en Acier x 40", "Masse en Acier x 40"] } } },
+  { slug: "dhalmora", nom: "Musée de Dhalmora", contrats: {
+      petit: { prix: 4000, lignes: ["Lingot Dwemer x 50"] },
+      moyen: { prix: 12000, lignes: ["Lingot Dwemer x 150"] },
+      gros:  { prix: 30000, lignes: ["Lingot Dwemer x 300"] } } },
+  { slug: "necrom", nom: "Nécropole de Necrom", contrats: {
+      petit: { prix: 4000, lignes: ["Lys des cimes rouges x 4000", "Lys des cimes bleus x 4000", "Lys des cimes violettes x 4000", "Pied de lutin x 1250"] },
+      moyen: { prix: 12000, lignes: ["Lys des cimes rouges x 12000", "Lys des cimes bleus x 12000", "Lys des cimes violettes x 12000", "Pied de lutin x 3750"] },
+      gros:  { prix: 24000, lignes: ["Lys des cimes rouges x 24000", "Lys des cimes bleus x 24000", "Lys des cimes violettes x 24000", "Pied de lutin x 7500"] } } },
+  { slug: "rihad", nom: "Quai de Rihad", contrats: {
+      petit: { prix: 2500, lignes: ["Patte de Lapin x 400", "Patte de Vasard x 400", "Patte de Chèvre x 400", "Grande ramure x 400", "Griffe d'Ours x 400"] },
+      moyen: { prix: 10000, lignes: ["Patte de Lapin x 1600", "Patte de Vasard x 1600", "Patte de Chèvre x 1600", "Grande ramure x 1600", "Griffe d'Ours x 1600"] },
+      gros:  { prix: 20000, lignes: ["Patte de Lapin x 3200", "Patte de Vasard x 3200", "Patte de Chèvre x 3200", "Grande ramure x 3200", "Griffe d'Ours x 3200"] } } },
+  { slug: "daguefilante", nom: "Guilde des Armuriers de Daguefilante", contrats: {
+      petit: { prix: 4000, lignes: ["Charbon pauvre x 1000", "Charbon classique x 500"] },
+      moyen: { prix: 12000, lignes: ["Charbon pauvre x 3000", "Charbon classique x 1500"] },
+      gros:  { prix: 24000, lignes: ["Charbon pauvre x 6000", "Charbon classique x 3000"] } } },
 ];
 const TIRAGE = ["gros", "moyen", "moyen", "petit", "petit", "petit"];
 const LIB_TAILLE = { gros: "Gros contrat", moyen: "Contrat moyen", petit: "Petit contrat" };
