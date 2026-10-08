@@ -1057,6 +1057,7 @@ function renderSuivi() {
 async function enregistrerSuivi(bloc, e) {
   const faits = [...bloc.querySelectorAll("input[type=checkbox]:checked")].map(c => Number(c.value));
   bloc.querySelectorAll("button, input").forEach(b => b.disabled = true);
+  const btn = bloc.querySelector("[data-enr]"); btn.textContent = "Mise à jour de Discord… (quelques secondes)";
   try {
     const rea = Object.fromEntries(faits.map(n => [String(n), true]));
     const url = await deposerImage(e.lieu, await imageContrats(contratsDe(e), rea, e.lieu));
