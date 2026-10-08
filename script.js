@@ -17,6 +17,12 @@ const INSTITUTIONS = ["Thalmor", "Empire", "Académie des Mages"];
    - intendant : Permanence + Historique ; administrateur : tout
    - permanence en cours (saisie) : ce navigateur, jusqu'à clôture ou « vider »
    ========================================================= */
+// Adresse officielle du site : l'ancienne adresse .netlify.app y renvoie automatiquement
+const SITE_URL = "https://intendant-keizaal.fr";
+if (/\.netlify\.app$/i.test(location.hostname) || /^www\./i.test(location.hostname)) {
+  location.replace(SITE_URL + location.pathname + location.search + location.hash);
+}
+
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 const fmt = n => (Number(n) || 0).toLocaleString("fr-FR") + " " + MONNAIE;
@@ -543,9 +549,10 @@ function renderHist() {
   });
   box.querySelectorAll("[data-hd]").forEach(b => b.onclick = async () => {
     if (!await confirmer("Supprimer définitivement cette permanence (pour tout le monde) ?")) return;
-    const { error } = await sb.from("permanences").delete().eq("id", b.dataset.hd);
-    if (error) return flash($("hm-" + b.dataset.hd), "Suppression impossible : " + error.message, false);
-    hist = hist.filter(p => p.id !== b.dataset.hd); renderHist();
+    const { error } = await sb.rpc("supprimer_permanence", { pid: b.dataset.hd });
+    if (error) return flash($("histMsg"), "Suppression impossible : " + error.message, false);
+    hist = hist.filter(p => p.id !== b.dataset.hd); renderHist(); renderStock();
+    flash($("histMsg"), "Permanence supprimée.", true);
   });
 }
 
@@ -857,7 +864,7 @@ function ecranConnexion(msg, connecte) {
 $("loginBtn").onclick = async () => {
   await sb.auth.signOut();
   const { error } = await sb.auth.signInWithOAuth({ provider: "discord",
-    options: { scopes: "identify guilds.members.read", redirectTo: location.origin + location.pathname } });
+    options: { scopes: "identify guilds.members.read", redirectTo: SITE_URL + "/" } });
   if (error) ecranConnexion("Connexion impossible : " + error.message, false);
 };
 const deconnexion = async () => {
@@ -897,6 +904,7 @@ sb.auth.onAuthStateChange((ev, session) => {
 
 function demarrer() {
   $("login").hidden = true; $("app").hidden = false;
+  if (location.hash || location.search.includes("code=")) history.replaceState(null, "", location.pathname);
   $("userName").textContent = PROFIL?.nom || "";
   $("userRole").textContent = estAdmin() ? "Administrateur" : "Intendant";
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
