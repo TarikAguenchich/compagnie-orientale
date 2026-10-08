@@ -874,10 +874,14 @@ const TIRAGE = ["gros", "moyen", "moyen", "petit", "petit", "petit"];
 const LIB_TAILLE = { gros: "Gros contrat", moyen: "Contrat moyen", petit: "Petit contrat" };
 let tirage = null;
 
-function majLieuxContrats() {
+// Villes = table chatellerie_discord (une ville = un salon Discord avec son webhook)
+async function majLieuxContrats() {
   const sel = $("ctrLieu"), garde = sel.value;
-  sel.innerHTML = REG.chatelleries.map(c => `<option>${esc(c.nom)}</option>`).join("");
-  if (garde) sel.value = garde;
+  const { data, error } = await sb.rpc("villes_contrats");
+  if (error) return flash($("ctrMsg"), "Liste des villes indisponible : " + error.message + " (as-tu lancé 17_contrats.sql ?)", false);
+  sel.innerHTML = data.map(v => `<option value="${esc(v.ville)}"${v.pret ? "" : " disabled"}>${esc(v.ville)}${v.pret ? "" : " — pas de webhook"}</option>`).join("");
+  const prete = data.find(v => v.ville === garde && v.pret) || data.find(v => v.pret);
+  if (prete) sel.value = prete.ville;
 }
 function genererContrats() {
   // une compagnie différente par contrat, tirée au hasard
@@ -889,13 +893,13 @@ function genererContrats() {
   }) };
   $("ctrTitre").textContent = `Aperçu — ${tirage.lieu}`;
   $("ctrListe").innerHTML = tirage.contrats.map(c => `<figure class="ctr ctr-${c.taille}">
-      <figcaption><b>${LIB_TAILLE[c.taille]}</b><span class="hint">${esc(c.nom)} · ${fmt(c.prix)}</span></figcaption>
+      <figcaption><b>${LIB_TAILLE[c.taille]}</b><span class="hint">${esc(c.nom)}</span><span class="ctr-prix">${fmt(c.prix)}</span></figcaption>
       <img src="contrats/${c.slug}-${c.taille}.jpg" alt="${esc(c.nom)} — ${LIB_TAILLE[c.taille]}" loading="lazy">
     </figure>`).join("");
   $("ctrApercu").hidden = false;
   $("ctrMsg").className = "msg";
 }
-$("ctrGen").onclick = () => { if (!$("ctrLieu").value) return flash($("ctrMsg"), "Aucune châtellerie (voir Réglages).", false); genererContrats(); $("ctrApercu").scrollIntoView({ behavior: "smooth" }); };
+$("ctrGen").onclick = () => { if (!$("ctrLieu").value) return flash($("ctrMsg"), "Aucune ville n'a de webhook : renseigne-le dans la table chatellerie_discord.", false); genererContrats(); $("ctrApercu").scrollIntoView({ behavior: "smooth" }); };
 $("ctrRegen").onclick = genererContrats;
 $("ctrEnvoi").onclick = async () => {
   if (!tirage) return;
