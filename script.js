@@ -901,16 +901,50 @@ function genererContrats() {
 }
 $("ctrGen").onclick = () => { if (!$("ctrLieu").value) return flash($("ctrMsg"), "Aucune ville n'a de webhook : renseigne-le dans la table chatellerie_discord.", false); genererContrats(); $("ctrApercu").scrollIntoView({ behavior: "smooth" }); };
 $("ctrRegen").onclick = genererContrats;
+// Les 6 contrats assemblés côte à côte dans une seule image (même ordre que l'aperçu)
+async function imageContrats(contrats) {
+  const imgs = await Promise.all(contrats.map(c => new Promise((ok, ko) => {
+    const im = new Image();
+    im.onload = () => ok(im);
+    im.onerror = () => ko(new Error("image introuvable : contrats/" + c.slug + "-" + c.taille + ".jpg"));
+    im.src = `contrats/${c.slug}-${c.taille}.jpg`;
+  })));
+  const h = Math.max(...imgs.map(i => i.naturalHeight)), ecart = 14, marge = 14;
+  const largeurs = imgs.map(i => Math.round(i.naturalWidth * h / i.naturalHeight));
+  const cv = document.createElement("canvas");
+  cv.width = largeurs.reduce((s, w) => s + w, 0) + ecart * (imgs.length - 1) + marge * 2;
+  cv.height = h + marge * 2;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "#1b1a22"; ctx.fillRect(0, 0, cv.width, cv.height);
+  let x = marge;
+  imgs.forEach((im, i) => { ctx.drawImage(im, x, marge, largeurs[i], h); x += largeurs[i] + ecart; });
+  return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.88));
+}
+
 $("ctrEnvoi").onclick = async () => {
   if (!tirage) return;
   if (!await confirmer(`Envoyer ces ${tirage.contrats.length} contrats d'exportation dans le salon de ${tirage.lieu} ?`)) return;
   $("ctrEnvoi").disabled = true;
-  const { error } = await sb.rpc("envoyer_contrats", { lieu: tirage.lieu, contrats: tirage.contrats });
-  $("ctrEnvoi").disabled = false;
-  if (error) return flash($("ctrMsg"), "Envoi impossible : " + error.message, false);
-  flash($("ctrMsg"), `Contrats envoyés sur Discord pour ${tirage.lieu} ✔`, true);
-  $("ctrApercu").hidden = true; tirage = null;
-  $("ctrMsg").scrollIntoView({ behavior: "smooth" });
+  try {
+    // 1. image unique  2. dépôt dans Supabase (public, pour Discord)  3. envoi
+    const blob = await imageContrats(tirage.contrats);
+    const nomFichier = `${sansAccent(tirage.lieu).replace(/[^a-z0-9]+/g, "-")}/${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
+    const up = await sb.storage.from("contrats").upload(nomFichier, blob, { contentType: "image/jpeg", upsert: false });
+    if (up.error) throw new Error("dépôt de l'image impossible (" + up.error.message + ")");
+    const url = sb.storage.from("contrats").getPublicUrl(nomFichier).data.publicUrl;
+    const { error } = await sb.rpc("envoyer_contrats", {
+      lieu: tirage.lieu, image_url: url,
+      contrats: tirage.contrats.map(({ slug, taille, nom, prix }) => ({ slug, taille, nom, prix })),
+    });
+    if (error) throw new Error(error.message);
+    flash($("ctrMsg"), `Contrats envoyés sur Discord pour ${tirage.lieu} ✔`, true);
+    $("ctrApercu").hidden = true; tirage = null;
+    $("ctrMsg").scrollIntoView({ behavior: "smooth" });
+  } catch (e) {
+    flash($("ctrMsg"), "Envoi impossible : " + e.message, false);
+  } finally {
+    $("ctrEnvoi").disabled = false;
+  }
 };
 
 /* ---------- Comptes (Réglages, admin) ---------- */
