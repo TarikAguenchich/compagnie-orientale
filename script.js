@@ -128,10 +128,10 @@ function confirmer(txt) {
 /* ---------- Onglets ---------- */
 let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
-  if (!estAdmin() && (t === "cat" || t === "reg")) t = "perm";
+  if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr")) t = "perm";
   const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", ctr: "viewCtr", cat: "viewCat", reg: "viewReg" };
   ["viewPerm", "viewHist", "viewStock", "viewCtr", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
-  if (t === "ctr") { if (estAdmin()) majLieuxContrats(); chargerSuivi(); }
+  if (t === "ctr") { majLieuxContrats(); chargerSuivi(); }
   if (t === "stock") renderStock();
   [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["ctr", "tabCtr"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
@@ -843,8 +843,9 @@ function renderStock() {
 ["sClient", "sItem"].forEach(id => $(id).oninput = renderStock);
 
 /* ---------- Contrats d'exportation (admin) ---------- */
-// Images : dossier contrats/ du site (<slug>-<taille>.jpg)
+// Images : dossiers du site (GitHub) — contrats/<slug>-<taille>.jpg et sceaux/<ville>.png
 const imgContrat = c => `contrats/${c.slug}-${c.taille}.jpg`;
+const imgSceau = v => `sceaux/${SCEAUX[cleVille(v)]}.png`;
 const COMPAGNIES = [
   { slug: "brasserie",  nom: "Brasserie Noire-Bruyère", contrats: {
       petit: { prix: 4000,  lignes: ["Bière x 200", "Vin x 100", "Hydromel x 30"] },
@@ -983,9 +984,14 @@ function genererContrats() {
 $("ctrGen").onclick = () => { if (!$("ctrLieu").value) return flash($("ctrMsg"), "Aucune ville n'a de webhook : renseigne-le dans la table chatellerie_discord.", false); genererContrats(); $("ctrApercu").scrollIntoView({ behavior: "smooth" }); };
 $("ctrRegen").onclick = genererContrats;
 // Sceaux des villes (dossier sceaux/ du site : <ville sans accent>.png)
-const SCEAUX = ["blancherive", "epervine", "faillaise", "markarth", "solitude", "vendeaume"];
+// ville (sans accent ni tiret) -> nom du fichier dans sceaux/
+const SCEAUX = {
+  aubetoile: "aubetoile", blancherive: "blancherive", bruma: "bruma", epervine: "epervine",
+  faillaise: "faillaise", forthiver: "fortdhiver", markarth: "markarth", morthal: "morthal",
+  solitude: "solitude", vendeaume: "vendeaume",
+};
 const cleVille = v => sansAccent(v).replace(/[^a-z0-9]/g, "");
-const aSceau = v => SCEAUX.includes(cleVille(v));
+const aSceau = v => cleVille(v) in SCEAUX;
 const ANGLES = [-8, 6, -4, 9, -10, 5];          // inclinaison du sceau, comme un vrai cachet
 const SCEAU_Y = 0.835, SCEAU_L = 0.62;          // centre (hauteur) et largeur du sceau dans un contrat
 const chargerImage = src => new Promise((ok, ko) => {
@@ -1000,9 +1006,9 @@ const chargerImage = src => new Promise((ok, ko) => {
 async function imageContrats(contrats, realises = {}, ville = "") {
   const imgs = await Promise.all(contrats.map(c => chargerImage(imgContrat(c))));
   const sceaux = await Promise.all(contrats.map((c, i) => {
-    return realises[String(i + 1)] && aSceau(ville) ? chargerImage(`sceaux/${cleVille(ville)}.png`) : null;
+    return realises[String(i + 1)] && aSceau(ville) ? chargerImage(imgSceau(ville)) : null;
   }));
-  const h = Math.min(1100, Math.max(...imgs.map(i => i.naturalHeight))), ecart = 12, marge = 12;   // image allégée pour Discord
+  const h = Math.min(900, Math.max(...imgs.map(i => i.naturalHeight))), ecart = 12, marge = 12;   // image allégée pour Discord
   const largeurs = imgs.map(i => Math.round(i.naturalWidth * h / i.naturalHeight));
   const cv = document.createElement("canvas");
   cv.width = largeurs.reduce((s, w) => s + w, 0) + ecart * (imgs.length - 1) + marge * 2;
@@ -1025,7 +1031,7 @@ async function imageContrats(contrats, realises = {}, ville = "") {
     }
     x += largeurs[i] + ecart;
   });
-  return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.82));
+  return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.78));
 }
 // Dépôt dans Supabase Storage (public, pour que Discord puisse l'afficher)
 async function deposerImage(lieu, blob) {
@@ -1073,7 +1079,7 @@ async function chargerSuivi() {
   renderSuivi();
 }
 function sceauHtml(ville, i) {
-  return aSceau(ville) ? `<img class="sceau" src="sceaux/${cleVille(ville)}.png" alt="Sceau de ${esc(ville)}" style="--a:${ANGLES[i % ANGLES.length]}deg">` : "";
+  return aSceau(ville) ? `<img class="sceau" src="${imgSceau(ville)}" alt="Sceau de ${esc(ville)}" style="--a:${ANGLES[i % ANGLES.length]}deg">` : "";
 }
 function renderSuivi() {
   $("ctrSuivi").querySelectorAll("details").forEach(d => d.open ? VILLES_OUVERTES.add(d.dataset.ville) : VILLES_OUVERTES.delete(d.dataset.ville));
@@ -1222,8 +1228,7 @@ function demarrer() {
   $("userName").textContent = PROFIL?.nom || "";
   $("userRole").textContent = estAdmin() ? "Administrateur" : "Intendant";
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
-  $("tabCat").hidden = $("tabReg").hidden = $("ctrTirage").hidden = !estAdmin();
-  $("tabCtr").hidden = false;
+  $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = !estAdmin();
   $("sIntWrap").hidden = !estAdmin();
   $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
   if (demarre) return; demarre = true;
