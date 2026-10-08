@@ -134,9 +134,9 @@
     <div class="card"><h2>Détail par châtellerie et client</h2><div id="stockDetail"></div></div>
   </div>
 
-  <!-- Contrats d'exportation (admin) -->
+  <!-- Contrats d'exportation (tirage : admin ; suivi : admin + intendants) -->
   <div id="viewCtr" hidden>
-    <div class="card">
+    <div class="card" id="ctrTirage">
       <h2>Contrats d'exportation</h2>
       <p class="hint" style="margin-top:0">Tirage au sort pour une ville : <b>1 gros</b>, <b>2 moyens</b> et <b>3 petits</b> contrats, une compagnie différente pour chacun. Vérifie l'aperçu, puis confirme pour l'envoyer dans le salon Discord de la ville.</p>
       <div class="row ctr-barre">
@@ -152,6 +152,12 @@
         <button type="button" class="btn primary" id="ctrEnvoi">Confirmer et envoyer sur Discord</button>
         <button type="button" class="btn" id="ctrRegen">Refaire le tirage</button>
       </div>
+    </div>
+    <div class="card">
+      <h2>Contrats envoyés</h2>
+      <p class="hint" style="margin-top:0">Coche les contrats remplis (un ou plusieurs), choisis la ville qui les a réalisés puis valide : son sceau est apposé sur l'image et le message Discord est mis à jour, sans nouvelle notification.</p>
+      <div class="msg" id="suiviMsg"></div>
+      <div id="ctrSuivi"></div>
     </div>
   </div>
 

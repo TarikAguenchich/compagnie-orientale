@@ -113,7 +113,7 @@ function ecouter() { sb.channel("maj")
   .on("postgres_changes", { event: "*", schema: "public", table: "profils" }, () => { if (estAdmin()) chargerComptes(); })
   .subscribe(); }
 // Filet de sécurité : rechargement quand on revient sur l'onglet
-document.addEventListener("visibilitychange", () => { if (!document.hidden && ROLE) { chargerCatalogue(); chargerHist(); chargerReglages(); if (estAdmin()) chargerComptes(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && ROLE) { if (!$("viewCtr").hidden) chargerSuivi(); chargerCatalogue(); chargerHist(); chargerReglages(); if (estAdmin()) chargerComptes(); } });
 
 /* ---------- Confirmation dans la page ---------- */
 function confirmer(txt) {
@@ -128,10 +128,10 @@ function confirmer(txt) {
 /* ---------- Onglets ---------- */
 let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
-  if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr")) t = "perm";
+  if (!estAdmin() && (t === "cat" || t === "reg")) t = "perm";
   const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", ctr: "viewCtr", cat: "viewCat", reg: "viewReg" };
   ["viewPerm", "viewHist", "viewStock", "viewCtr", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
-  if (t === "ctr") majLieuxContrats();
+  if (t === "ctr") { if (estAdmin()) majLieuxContrats(); chargerSuivi(); }
   if (t === "stock") renderStock();
   [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["ctr", "tabCtr"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
@@ -901,14 +901,27 @@ function genererContrats() {
 }
 $("ctrGen").onclick = () => { if (!$("ctrLieu").value) return flash($("ctrMsg"), "Aucune ville n'a de webhook : renseigne-le dans la table chatellerie_discord.", false); genererContrats(); $("ctrApercu").scrollIntoView({ behavior: "smooth" }); };
 $("ctrRegen").onclick = genererContrats;
-// Les 6 contrats assemblés côte à côte dans une seule image (même ordre que l'aperçu)
-async function imageContrats(contrats) {
-  const imgs = await Promise.all(contrats.map(c => new Promise((ok, ko) => {
-    const im = new Image();
-    im.onload = () => ok(im);
-    im.onerror = () => ko(new Error("image introuvable : contrats/" + c.slug + "-" + c.taille + ".jpg"));
-    im.src = `contrats/${c.slug}-${c.taille}.jpg`;
-  })));
+// Sceaux des villes (dossier sceaux/ du site : <ville sans accent>.png)
+const SCEAUX = ["blancherive", "epervine", "faillaise", "markarth", "solitude", "vendeaume"];
+const cleVille = v => sansAccent(v).replace(/[^a-z0-9]/g, "");
+const aSceau = v => SCEAUX.includes(cleVille(v));
+const ANGLES = [-8, 6, -4, 9, -10, 5];          // inclinaison du sceau, comme un vrai cachet
+const SCEAU_Y = 0.835, SCEAU_L = 0.62;          // centre (hauteur) et largeur du sceau dans un contrat
+const chargerImage = src => new Promise((ok, ko) => {
+  const im = new Image();
+  im.onload = () => ok(im);
+  im.onerror = () => ko(new Error("image introuvable : " + src));
+  im.src = src;
+});
+
+// Les contrats assemblés côte à côte dans une seule image (même ordre que l'aperçu),
+// avec le sceau de la ville sur ceux réalisés (realises = { "3": { ville }, … })
+async function imageContrats(contrats, realises = {}) {
+  const imgs = await Promise.all(contrats.map(c => chargerImage(`contrats/${c.slug}-${c.taille}.jpg`)));
+  const sceaux = await Promise.all(contrats.map((c, i) => {
+    const r = realises[String(i + 1)];
+    return r && aSceau(r.ville) ? chargerImage(`sceaux/${cleVille(r.ville)}.png`) : null;
+  }));
   const h = Math.min(1100, Math.max(...imgs.map(i => i.naturalHeight))), ecart = 12, marge = 12;   // image allégée pour Discord
   const largeurs = imgs.map(i => Math.round(i.naturalWidth * h / i.naturalHeight));
   const cv = document.createElement("canvas");
@@ -917,8 +930,29 @@ async function imageContrats(contrats) {
   const ctx = cv.getContext("2d");
   ctx.fillStyle = "#1b1a22"; ctx.fillRect(0, 0, cv.width, cv.height);
   let x = marge;
-  imgs.forEach((im, i) => { ctx.drawImage(im, x, marge, largeurs[i], h); x += largeurs[i] + ecart; });
+  imgs.forEach((im, i) => {
+    ctx.drawImage(im, x, marge, largeurs[i], h);
+    const s = sceaux[i];
+    if (s) {
+      const k = largeurs[i] * SCEAU_L / Math.max(s.naturalWidth, s.naturalHeight);
+      const sw = s.naturalWidth * k, sh = s.naturalHeight * k;
+      ctx.save();
+      ctx.translate(x + largeurs[i] / 2, marge + h * SCEAU_Y);
+      ctx.rotate(ANGLES[i % ANGLES.length] * Math.PI / 180);
+      ctx.shadowColor = "rgba(0,0,0,.35)"; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
+      ctx.drawImage(s, -sw / 2, -sh / 2, sw, sh);
+      ctx.restore();
+    }
+    x += largeurs[i] + ecart;
+  });
   return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.82));
+}
+// Dépôt dans Supabase Storage (public, pour que Discord puisse l'afficher)
+async function deposerImage(lieu, blob) {
+  const nomFichier = `${sansAccent(lieu).replace(/[^a-z0-9]+/g, "-")}/${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
+  const up = await sb.storage.from("contrats").upload(nomFichier, blob, { contentType: "image/jpeg", upsert: false });
+  if (up.error) throw new Error("dépôt de l'image impossible (" + up.error.message + ")");
+  return sb.storage.from("contrats").getPublicUrl(nomFichier).data.publicUrl;
 }
 
 $("ctrEnvoi").onclick = async () => {
@@ -926,12 +960,7 @@ $("ctrEnvoi").onclick = async () => {
   if (!await confirmer(`Envoyer ces ${tirage.contrats.length} contrats d'exportation dans le salon de ${tirage.lieu} ?`)) return;
   $("ctrEnvoi").disabled = true;
   try {
-    // 1. image unique  2. dépôt dans Supabase (public, pour Discord)  3. envoi
-    const blob = await imageContrats(tirage.contrats);
-    const nomFichier = `${sansAccent(tirage.lieu).replace(/[^a-z0-9]+/g, "-")}/${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
-    const up = await sb.storage.from("contrats").upload(nomFichier, blob, { contentType: "image/jpeg", upsert: false });
-    if (up.error) throw new Error("dépôt de l'image impossible (" + up.error.message + ")");
-    const url = sb.storage.from("contrats").getPublicUrl(nomFichier).data.publicUrl;
+    const url = await deposerImage(tirage.lieu, await imageContrats(tirage.contrats));
     const { error } = await sb.rpc("envoyer_contrats", {
       lieu: tirage.lieu, image_url: url,
       contrats: tirage.contrats.map(({ slug, taille, nom, prix }) => ({ slug, taille, nom, prix })),
@@ -939,6 +968,7 @@ $("ctrEnvoi").onclick = async () => {
     if (error) throw new Error(error.message);
     flash($("ctrMsg"), `Contrats envoyés sur Discord pour ${tirage.lieu} ✔`, true);
     $("ctrApercu").hidden = true; tirage = null;
+    chargerSuivi();
     $("ctrMsg").scrollIntoView({ behavior: "smooth" });
   } catch (e) {
     flash($("ctrMsg"), "Envoi impossible : " + e.message, false);
@@ -946,6 +976,75 @@ $("ctrEnvoi").onclick = async () => {
     $("ctrEnvoi").disabled = false;
   }
 };
+
+/* ---------- Contrats envoyés : sceau des villes (admin + intendants) ---------- */
+let ENVOIS = [], VILLES_SCEAU = [];
+const contratsDe = e => (e.contrats || []).filter(c => c.slug);
+async function chargerSuivi() {
+  const [env, vil] = await Promise.all([
+    sb.from("contrats_envois").select("id, lieu, contrats, envoye_le, realises, version")
+      .not("message_id", "is", null).order("envoye_le", { ascending: false }).limit(20),
+    sb.rpc("villes_sceau"),
+  ]);
+  if (env.error) return flash($("suiviMsg"), "Contrats indisponibles : " + env.error.message + " (as-tu lancé 17_contrats.sql ?)", false);
+  ENVOIS = env.data || [];
+  VILLES_SCEAU = (vil.data || []).map(v => v.ville).filter(aSceau);
+  renderSuivi();
+}
+function renderSuivi() {
+  if (!ENVOIS.length) { $("ctrSuivi").innerHTML = `<p class="hint">Aucun contrat envoyé pour l'instant.</p>`; return; }
+  const options = VILLES_SCEAU.length
+    ? VILLES_SCEAU.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("")
+    : `<option value="">— aucune ville avec un sceau —</option>`;
+  $("ctrSuivi").innerHTML = ENVOIS.map(e => {
+    const cs = contratsDe(e), rea = e.realises || {};
+    const nb = cs.filter((c, i) => rea[String(i + 1)]).length;
+    return `<div class="suivi" data-envoi="${e.id}">
+      <div class="suivi-tete"><b>${esc(e.lieu)}</b><span class="hint">${new Date(e.envoye_le).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</span>
+        <span class="tag ${nb === cs.length ? "ok" : ""}">${nb} / ${cs.length} réalisé${nb > 1 ? "s" : ""}</span></div>
+      <div class="ctr-grille">${cs.map((c, i) => {
+        const n = i + 1, r = rea[String(n)];
+        return `<label class="ctr suivi-ctr${r ? " fait" : ""}">
+          <span class="suivi-cap"><input type="checkbox" value="${n}" data-fait="${r ? 1 : 0}"> <b>${n}.</b> ${esc(c.nom)}
+            <span class="hint">${r ? "✅ Réalisé par <b>" + esc(r.ville) + "</b>" : fmt(c.prix)}</span></span>
+          <span class="ctr-img"><img src="contrats/${c.slug}-${c.taille}.jpg" alt="${esc(c.nom)}" loading="lazy">${r && aSceau(r.ville)
+            ? `<img class="sceau" src="sceaux/${cleVille(r.ville)}.png" alt="Sceau de ${esc(r.ville)}" style="--a:${ANGLES[i % ANGLES.length]}deg">` : ""}</span>
+        </label>`;
+      }).join("")}</div>
+      <div class="row suivi-actions">
+        <div><label>Réalisé par</label><select data-ville>${options}</select></div>
+        <button type="button" class="btn primary small" data-sceau="poser" ${VILLES_SCEAU.length ? "" : "disabled"}>Apposer le sceau sur les contrats cochés</button>
+        <button type="button" class="btn small" data-sceau="retirer">Retirer le sceau</button>
+      </div>
+    </div>`;
+  }).join("");
+  $("ctrSuivi").querySelectorAll("[data-sceau]").forEach(b => b.onclick = () => majSceaux(b));
+}
+async function majSceaux(btn) {
+  const bloc = btn.closest(".suivi"), e = ENVOIS.find(x => String(x.id) === bloc.dataset.envoi);
+  if (!e) return;
+  const poser = btn.dataset.sceau === "poser";
+  const ville = poser ? bloc.querySelector("[data-ville]").value : null;
+  const numeros = [...bloc.querySelectorAll("input[type=checkbox]:checked")]
+    .filter(c => (c.dataset.fait === "1") !== poser).map(c => Number(c.value));
+  if (!numeros.length) return flash($("suiviMsg"), poser ? "Coche au moins un contrat pas encore réalisé." : "Coche au moins un contrat déjà réalisé.", false);
+  if (poser && !ville) return flash($("suiviMsg"), "Choisis la ville qui a réalisé les contrats.", false);
+  const liste = numeros.map(n => "n° " + n).join(", ");
+  if (!await confirmer(poser ? `Apposer le sceau de ${ville} sur les contrats ${liste} (${e.lieu}) ?` : `Retirer le sceau des contrats ${liste} (${e.lieu}) ?`)) return;
+  bloc.querySelectorAll("button").forEach(b => b.disabled = true);
+  try {
+    const rea = { ...(e.realises || {}) };
+    numeros.forEach(n => { if (poser) rea[String(n)] = { ville }; else delete rea[String(n)]; });
+    const url = await deposerImage(e.lieu, await imageContrats(contratsDe(e), rea));
+    const { error } = await sb.rpc("realiser_contrats", { envoi: e.id, numeros, ville, version_vue: e.version, image_url: url });
+    if (error) throw new Error(error.message);
+    flash($("suiviMsg"), poser ? `Sceau de ${ville} apposé, message Discord mis à jour ✔` : "Sceau retiré, message Discord mis à jour ✔", true);
+  } catch (err) {
+    flash($("suiviMsg"), "Impossible : " + err.message, false);
+  } finally {
+    await chargerSuivi();
+  }
+}
 
 /* ---------- Comptes (Réglages, admin) ---------- */
 let COMPTES = [];
@@ -1017,7 +1116,8 @@ function demarrer() {
   $("userName").textContent = PROFIL?.nom || "";
   $("userRole").textContent = estAdmin() ? "Administrateur" : "Intendant";
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
-  $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = !estAdmin();
+  $("tabCat").hidden = $("tabReg").hidden = $("ctrTirage").hidden = !estAdmin();
+  $("tabCtr").hidden = false;
   $("sIntWrap").hidden = !estAdmin();
   $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
   if (demarre) return; demarre = true;
