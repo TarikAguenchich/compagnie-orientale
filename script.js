@@ -1033,12 +1033,20 @@ async function imageContrats(contrats, realises = {}, ville = "") {
   });
   return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.78));
 }
-// Dépôt dans Supabase Storage (public, pour que Discord puisse l'afficher)
-async function deposerImage(lieu, blob) {
-  const nomFichier = `${sansAccent(lieu).replace(/[^a-z0-9]+/g, "-")}/${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
-  const up = await sb.storage.from("contrats").upload(nomFichier, blob, { contentType: "image/jpeg", upsert: false });
-  if (up.error) throw new Error("dépôt de l'image impossible (" + up.error.message + ")");
-  return sb.storage.from("contrats").getPublicUrl(nomFichier).data.publicUrl;
+// Envoi à la fonction Supabase « contrats » : elle poste sur Discord avec l'image en pièce jointe
+async function appelContrats(champs, blob) {
+  const fd = new FormData();
+  Object.entries(champs).forEach(([k, v]) => fd.append(k, typeof v === "string" ? v : JSON.stringify(v)));
+  fd.append("image", blob, "contrats.jpg");
+  const { data, error } = await sb.functions.invoke("contrats", { body: fd });
+  if (error) {
+    let m = error.message;
+    try { const j = await error.context.json(); if (j?.error) m = j.error; } catch {}
+    if (/Failed to send|404|not found/i.test(m)) m += " (la fonction « contrats » est-elle déployée dans Supabase ?)";
+    throw new Error(m);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
 }
 
 $("ctrEnvoi").onclick = async () => {
@@ -1046,12 +1054,10 @@ $("ctrEnvoi").onclick = async () => {
   if (!await confirmer(`Envoyer ces ${tirage.contrats.length} contrats d'exportation dans le salon de ${tirage.lieu} ?`)) return;
   $("ctrEnvoi").disabled = true;
   try {
-    const url = await deposerImage(tirage.lieu, await imageContrats(tirage.contrats));
-    const { error } = await sb.rpc("envoyer_contrats", {
-      lieu: tirage.lieu, image_url: url,
+    await appelContrats({
+      action: "envoyer", lieu: tirage.lieu,
       contrats: tirage.contrats.map(({ slug, taille, nom, prix }) => ({ slug, taille, nom, prix })),
-    });
-    if (error) throw new Error(error.message);
+    }, await imageContrats(tirage.contrats));
     flash($("ctrMsg"), `Contrats envoyés sur Discord pour ${tirage.lieu} ✔`, true);
     $("ctrApercu").hidden = true; tirage = null;
     chargerSuivi();
@@ -1147,9 +1153,7 @@ async function enregistrerSuivi(bloc, e) {
   const btn = bloc.querySelector("[data-enr]"); btn.textContent = "Mise à jour de Discord… (quelques secondes)";
   try {
     const rea = Object.fromEntries(faits.map(n => [String(n), true]));
-    const url = await deposerImage(e.lieu, await imageContrats(contratsDe(e), rea, e.lieu));
-    const { error } = await sb.rpc("maj_contrats", { envoi: e.id, faits, version_vue: e.version, image_url: url });
-    if (error) throw new Error(error.message);
+    await appelContrats({ action: "maj", envoi: String(e.id), version_vue: String(e.version), faits }, await imageContrats(contratsDe(e), rea, e.lieu));
     flash($("suiviMsg"), faits.length === contratsDe(e).length ? `Contrats de ${e.lieu} accomplis ✔ (ils disparaîtront dans 7 jours)` : "Enregistré, message Discord mis à jour ✔", true);
   } catch (err) {
     flash($("suiviMsg"), "Impossible : " + err.message, false);
