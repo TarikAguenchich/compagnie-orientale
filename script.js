@@ -49,7 +49,8 @@ const lib = x => x.nom + (x.var ? " — " + x.var : "");
 const idOf = x => { const a = ITEM[cle(x)]; const cur = a ? (x.var ? a.varIds?.[x.var] : a.id) : ""; return cur || x.id || ""; };
 
 // Intendants / châtelleries / coffres (copie locale pour l'affichage immédiat)
-let REG = { intendants: [], chatelleries: [], coffres: [] };
+let REG = { intendants: [], secretaires: [], chatelleries: [], coffres: [] };
+let ZAFF = [];   // intendant / secrétaire de chaque zone (admin)
 try { const r = JSON.parse(localStorage.getItem("reglages_cache")); if (r && Array.isArray(r.intendants)) REG = r; } catch {}
 
 let state = { intendantId: "", lieu: "", coffre: "", date: today(), orders: [], draft: null };
@@ -98,7 +99,9 @@ async function chargerReglages() {
   const [i, c, k] = await Promise.all(["intendants", "chatelleries", "coffres"].map(t => sb.from(t).select("*").order("nom")));
   const err = [i, c, k].find(r => r.error);
   if (err) { statut("⚠ Intendants / châtelleries non chargés : " + err.error.message + " (as-tu lancé 3_intendants.sql ?)"); return; }
-  REG = { intendants: i.data, chatelleries: c.data, coffres: k.data };
+  const sec = await sb.from("secretaires").select("*").order("nom");
+  REG = { intendants: i.data, secretaires: sec.error ? [] : sec.data, chatelleries: c.data, coffres: k.data };
+  if (estAdmin()) { const z = await sb.rpc("zones_affectations"); ZAFF = z.error ? [] : z.data; }
   try { localStorage.setItem("reglages_cache", JSON.stringify(REG)); } catch {}
   majPermanence(); majFiltres();
   if (!$("viewReg").hidden) renderReg();
@@ -111,6 +114,7 @@ function ecouter() { sb.channel("maj")
   .on("postgres_changes", { event: "*", schema: "public", table: "intendants" }, majReg)
   .on("postgres_changes", { event: "*", schema: "public", table: "chatelleries" }, majReg)
   .on("postgres_changes", { event: "*", schema: "public", table: "coffres" }, majReg)
+  .on("postgres_changes", { event: "*", schema: "public", table: "secretaires" }, majReg)
   .on("postgres_changes", { event: "*", schema: "public", table: "articles" }, () => { clearTimeout(tCat); tCat = setTimeout(chargerCatalogue, 400); })
   .on("postgres_changes", { event: "*", schema: "public", table: "permanences" }, () => { clearTimeout(tHist); tHist = setTimeout(chargerHist, 400); })
   .on("postgres_changes", { event: "*", schema: "public", table: "profils" }, () => { if (estAdmin()) chargerComptes(); })
@@ -804,22 +808,18 @@ $("cExport").onclick = () => {
 /* ---------- Réglages : zones (châtellerie + coffre + membres automatiques) ---------- */
 function renderZones() {
   if (!$("regZones")) return;
-  const membres = (fonction, z) => COMPTES.filter(c => c.role === fonction && (c.zones || []).includes(z)).map(c => {
-    const manuel = c.role_admin === fonction && (c.zones_admin || []).includes(z);
-    const discord = (c.zones_discord || []).includes(z) && c.role_discord === fonction;
-    return `<span class="puce${manuel ? " manuel" : ""}" title="${manuel ? "Ajouté(e) à la main" : "Via ses rôles Discord"}">${esc(c.nom || "?")}${discord && !manuel ? ' <small>Discord</small>' : ""}${manuel ? ` <button type="button" class="puce-x" data-affect="${c.id}|${fonction}|${z}|0" title="Retirer de la zone ${z}">✕</button>` : ""}</span>`;
-  }).join("");
-  const ajout = (fonction, z) => {
-    const dispo = COMPTES.filter(c => c.role_discord !== "admin" && c.role !== "admin" && !(c.role === fonction && (c.zones || []).includes(z)));
-    return dispo.length ? `<select class="puce-ajout" data-ajout="${fonction}|${z}"><option value="">+ ajouter…</option>${dispo.map(c => `<option value="${c.id}">${esc(c.nom || "?")}</option>`).join("")}</select>` : "";
+  const liste = (fonction, z, choisi) => {
+    const fiches = fonction === "intendant" ? REG.intendants : REG.secretaires;
+    return `<select data-aff="${fonction}|${z}"><option value="">— aucun${fonction === "secretaire" ? "e" : ""} —</option>${
+      fiches.map(f => `<option value="${f.id}" ${String(f.id) === String(choisi ?? "") ? "selected" : ""}>${esc(f.nom)}</option>`).join("")}</select>`;
   };
   $("regZones").innerHTML = `<table class="zones"><thead><tr><th>Zone</th><th>Coffre</th><th>Intendant</th><th>Secrétaire</th></tr></thead><tbody>${
     [1, 2, 3, 4, 5, 6, 7].map(z => {
-      const k = REG.coffres.filter(c => c.zone_id === z);
+      const k = REG.coffres.filter(c => c.zone_id === z), a = ZAFF.find(x => x.zone === z) || {};
       return `<tr><td><b>Zone ${z}</b></td>
         <td><input data-zone-nom="coffres|${z}|${k[0]?.id ?? ""}" value="${esc(k[0]?.nom || "")}" placeholder="Nom du coffre">${k.length > 1 ? `<span class="hint">+ ${k.slice(1).map(x => esc(x.nom)).join(", ")}</span>` : ""}</td>
-        <td><div class="puces">${membres("intendant", z)}${ajout("intendant", z)}</div></td>
-        <td><div class="puces">${membres("secretaire", z)}${ajout("secretaire", z)}</div></td></tr>`;
+        <td>${liste("intendant", z, a.intendant_id)}</td>
+        <td>${liste("secretaire", z, a.secretaire_id)}</td></tr>`;
     }).join("")}</tbody></table>`;
   $("regZones").querySelectorAll("[data-zone-nom]").forEach(inp => inp.onchange = async () => {
     const [table, z, id] = inp.dataset.zoneNom.split("|"), nom = inp.value.trim();
@@ -831,31 +831,19 @@ function renderZones() {
     else flash($("zonesMsg"), `Zone ${z} : coffre « ${nom} » enregistré.`, true);
     await chargerReglages();
   });
-  const affecter = async (compte, fonction, z, ajouter) => {
-    const c = COMPTES.find(x => x.id === compte), lib = fonction === "intendant" ? "intendant" : "secrétaire";
-    if (ajouter && c?.role && c.role !== fonction
-        && !await confirmer(`${c.nom} est actuellement ${c.role === "intendant" ? "intendant" : "secrétaire"}. Une personne n'a qu'une fonction : la passer ${lib} (dans toutes ses zones) ?`)) return renderZones();
-    const { error } = await sb.rpc("affecter_compte", { compte, fonction, zone: Number(z), ajouter });
-    if (error) flash($("zonesMsg"), "Non enregistré : " + error.message + (/affecter_compte/.test(error.message) ? " (as-tu lancé 21_affectations.sql ?)" : ""), false);
-    else flash($("zonesMsg"), `${c?.nom || "?"} ${ajouter ? "ajouté(e) en" : "retiré(e) de la"} zone ${z}${ajouter ? " comme " + lib : ""}.`, true);
-    await chargerComptes(); await chargerReglages();
-  };
-  $("regZones").querySelectorAll("[data-ajout]").forEach(sel => sel.onchange = () => {
-    if (!sel.value) return;
-    const [fonction, z] = sel.dataset.ajout.split("|");
-    affecter(sel.value, fonction, z, true);
-  });
-  $("regZones").querySelectorAll("[data-affect]").forEach(b => b.onclick = async () => {
-    const [compte, fonction, z] = b.dataset.affect.split("|");
-    const c = COMPTES.find(x => x.id === compte);
-    if (!await confirmer(`Retirer ${c?.nom || "?"} de la zone ${z} ?`)) return;
-    affecter(compte, fonction, z, false);
+  $("regZones").querySelectorAll("[data-aff]").forEach(sel => sel.onchange = async () => {
+    const [fonction, z] = sel.dataset.aff.split("|"), lib = fonction === "intendant" ? "Intendant" : "Secrétaire";
+    const { error } = await sb.rpc("affecter_zone", { zone: Number(z), fonction, fiche: sel.value ? Number(sel.value) : null });
+    if (error) flash($("zonesMsg"), "Non enregistré : " + error.message + (/affecter_zone/.test(error.message) ? " (as-tu lancé 22_zones_affectation.sql ?)" : ""), false);
+    else flash($("zonesMsg"), `Zone ${z} : ${lib.toLowerCase()} ${sel.value ? "« " + sel.selectedOptions[0].text + " »" : "retiré(e)"}.`, true);
+    await chargerReglages(); if (estAdmin()) chargerComptes();
   });
 }
 
 /* ---------- Réglages : intendants ---------- */
 const TABLES = {
   intendants:   { nom: "intendant",   liste: "regInt",  champ: "rInt",  msg: "rIntMsg" },
+  secretaires:  { nom: "secrétaire",  liste: "regSec",  champ: "rSec",  msg: "rSecMsg" },
 };
 const nomIntendant = id => REG.intendants.find(i => String(i.id) === String(id))?.nom;
 const optionsZones = choisi => `<option value="">— aucune zone —</option>` +
@@ -873,10 +861,11 @@ function renderReg() {
     if (!rows.length) { $(t.liste).innerHTML = `<p class="empty">Aucun(e) ${t.nom}.</p>`; return; }
     $(t.liste).innerHTML = `<table><tbody>${rows.map(r => {
       let info = "";
-      if (table === "intendants") {
-        const comptes = COMPTES.filter(c => String(c.intendant_id) === String(r.id));
-        const zs = [...new Set(comptes.flatMap(c => c.zones || []))];
-        if (zs.length) info = `<span class="hint">Zone ${zs.join(", ")}</span>`;
+      if (table === "intendants" || table === "secretaires") {
+        const champ = table === "intendants" ? "intendant_id" : "secretaire_id";
+        const zs = ZAFF.filter(z => String(z[champ]) === String(r.id)).map(z => z.zone);
+        const compte = COMPTES.some(c => String(c[champ]) === String(r.id));
+        info = `<span class="hint">${zs.length ? "Zone " + zs.join(", ") : "aucune zone"}${compte ? "" : " · ne s'est pas encore connecté(e)"}</span>`;
       }
       return `<tr class="reg-row"><td><b>${esc(r.nom)}</b>${info ? "<br>" + info : ""}</td>
         ${t.lien ? `<td class="reg-lien"><select data-lien="${table}|${r.id}">${optionsZones(r.zone_id)}</select></td>` : ""}
@@ -894,7 +883,7 @@ function renderReg() {
     const [table, id] = b.dataset.rdel.split("|"), t = TABLES[table];
     const r = REG[table].find(x => String(x.id) === id);
     const suite = "";
-    if (!await confirmer(`Supprimer ${t.nom === "intendant" ? "l'intendant" : t.nom === "coffre" ? "le coffre" : "la châtellerie"} « ${r.nom} » (pour tout le monde) ?${suite} L'historique n'est pas modifié.`)) return;
+    if (!await confirmer(`Supprimer ${t.nom === "intendant" ? "l'intendant" : "la secrétaire"} « ${r.nom} » ? ${t.nom === "intendant" ? "Il" : "Elle"} sera retiré(e) de sa zone. L'historique n'est pas modifié.`)) return;
     const { error } = await sb.from(table).delete().eq("id", id);
     if (error) return flash($(t.msg), "Suppression impossible : " + error.message, false);
     flash($(t.msg), `« ${r.nom} » supprimé.`, true);

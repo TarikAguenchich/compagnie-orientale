@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261009d">
+<link rel="stylesheet" href="style.css?v=20261009e">
 </head>
 <body>
 <!-- Connexion -->
@@ -219,8 +219,14 @@
       <div id="regInt" style="margin-top:10px"></div>
     </div>
     <div class="card">
+      <h2>Secrétaires</h2>
+      <div class="row reg-add"><input id="rSec" placeholder="Nom de la secrétaire" autocomplete="off"><button type="button" class="btn primary" id="rSecAdd">Ajouter</button></div>
+      <div class="msg" id="rSecMsg"></div>
+      <div id="regSec" style="margin-top:10px"></div>
+    </div>
+    <div class="card">
       <h2>Zones</h2>
-      <p class="hint" style="margin-top:0">Chaque zone a son coffre (tu peux le renommer). Les intendants et secrétaires sont rattachés <b>automatiquement</b> par leurs rôles Discord (Intendant / Secrétaire + Zone N) à leur connexion ; tu peux aussi en <b>ajouter à la main</b> (« + ajouter… », la personne doit s'être connectée au moins une fois) et les retirer avec ✕.</p>
+      <p class="hint" style="margin-top:0">Chaque zone a son coffre, son intendant et sa secrétaire. À sa connexion, quelqu'un qui a les rôles Discord Intendant (ou Secrétaire) + Zone N est placé <b>automatiquement</b> dans sa zone si elle est vide ; tu peux toujours <b>changer avec la liste</b>. Seuls l'intendant et la secrétaire choisis ici ont accès à la zone.</p>
       <div class="msg" id="zonesMsg"></div>
       <div id="regZones"></div>
     </div>
@@ -257,6 +263,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261009d"></script>
+<script src="script.js?v=20261009e"></script>
 </body>
 </html>
