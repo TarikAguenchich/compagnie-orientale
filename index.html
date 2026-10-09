@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261009b">
+<link rel="stylesheet" href="style.css?v=20261009c">
 </head>
 <body>
 <!-- Connexion -->
@@ -219,18 +219,10 @@
       <div id="regInt" style="margin-top:10px"></div>
     </div>
     <div class="card">
-      <h2>Châtelleries</h2>
-      <div class="row reg-add"><input id="rLieu" placeholder="Nom de la châtellerie" autocomplete="off"><select id="rLieuInt" title="Zone"></select><button type="button" class="btn primary" id="rLieuAdd">Ajouter</button></div>
-      <div class="msg" id="rLieuMsg"></div>
-      <p class="hint">La liste à droite indique la zone de cette châtellerie : c'est elle qu'utilisent l'intendant et la secrétaire de la zone (une seule par zone).</p>
-      <div id="regLieu"></div>
-    </div>
-    <div class="card">
-      <h2>Coffres</h2>
-      <div class="row reg-add"><input id="rCof" placeholder="Nom du coffre" autocomplete="off"><select id="rCofInt" title="Zone"></select><button type="button" class="btn primary" id="rCofAdd">Ajouter</button></div>
-      <div class="msg" id="rCofMsg"></div>
-      <p class="hint">La liste à droite indique la zone de ce coffre : c'est lui qu'utilisent l'intendant et la secrétaire de la zone (un seul par zone).</p>
-      <div id="regCof"></div>
+      <h2>Zones</h2>
+      <p class="hint" style="margin-top:0">Chaque zone a sa châtellerie et son coffre (tu peux les renommer). Les intendants et secrétaires sont rattachés automatiquement à leur zone par leurs rôles Discord (Intendant / Secrétaire + Zone N), à leur connexion.</p>
+      <div class="msg" id="zonesMsg"></div>
+      <div id="regZones"></div>
     </div>
     <div class="card">
       <h2>Compagnies d'exportation <span class="hint" id="cieNb"></span></h2>
@@ -265,6 +257,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261009b"></script>
+<script src="script.js?v=20261009c"></script>
 </body>
 </html>

@@ -801,11 +801,35 @@ $("cExport").onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 
-/* ---------- Réglages : intendants, châtelleries, coffres ---------- */
+/* ---------- Réglages : zones (châtellerie + coffre + membres automatiques) ---------- */
+function renderZones() {
+  if (!$("regZones")) return;
+  const noms = (role, z) => COMPTES.filter(c => c.role === role && (c.zones || []).includes(z)).map(c => esc(c.nom || "?")).join(", ");
+  $("regZones").innerHTML = `<table class="zones"><thead><tr><th>Zone</th><th>Châtellerie</th><th>Coffre</th><th>Intendant</th><th>Secrétaire</th></tr></thead><tbody>${
+    [1, 2, 3, 4, 5, 6, 7].map(z => {
+      const l = REG.chatelleries.filter(c => c.zone_id === z), k = REG.coffres.filter(c => c.zone_id === z);
+      return `<tr><td><b>Zone ${z}</b></td>
+        <td><input data-zone-nom="chatelleries|${z}|${l[0]?.id ?? ""}" value="${esc(l[0]?.nom || "")}" placeholder="Nom de la châtellerie">${l.length > 1 ? `<span class="hint">+ ${l.slice(1).map(x => esc(x.nom)).join(", ")}</span>` : ""}</td>
+        <td><input data-zone-nom="coffres|${z}|${k[0]?.id ?? ""}" value="${esc(k[0]?.nom || "")}" placeholder="Nom du coffre">${k.length > 1 ? `<span class="hint">+ ${k.slice(1).map(x => esc(x.nom)).join(", ")}</span>` : ""}</td>
+        <td>${noms("intendant", z) || '<span class="hint">—</span>'}</td>
+        <td>${noms("secretaire", z) || '<span class="hint">—</span>'}</td></tr>`;
+    }).join("")}</tbody></table>`;
+  $("regZones").querySelectorAll("[data-zone-nom]").forEach(inp => inp.onchange = async () => {
+    const [table, z, id] = inp.dataset.zoneNom.split("|"), nom = inp.value.trim();
+    const quoi = table === "coffres" ? "coffre" : "châtellerie";
+    if (!nom) { renderZones(); return flash($("zonesMsg"), `Le nom du ${quoi} ne peut pas être vide.`, false); }
+    if (REG[table].some(x => x.nom.toLowerCase() === nom.toLowerCase() && String(x.id) !== id)) { renderZones(); return flash($("zonesMsg"), `« ${nom} » existe déjà.`, false); }
+    const { error } = id ? await sb.from(table).update({ nom }).eq("id", id)
+                         : await sb.from(table).insert({ nom, zone_id: Number(z) });
+    if (error) flash($("zonesMsg"), "Non enregistré : " + error.message, false);
+    else flash($("zonesMsg"), `Zone ${z} : ${quoi} « ${nom} » enregistré${quoi === "châtellerie" ? "e" : ""}.`, true);
+    await chargerReglages();
+  });
+}
+
+/* ---------- Réglages : intendants ---------- */
 const TABLES = {
   intendants:   { nom: "intendant",   liste: "regInt",  champ: "rInt",  msg: "rIntMsg" },
-  chatelleries: { nom: "châtellerie", liste: "regLieu", champ: "rLieu", msg: "rLieuMsg", lien: "rLieuInt" },
-  coffres:      { nom: "coffre",      liste: "regCof",  champ: "rCof",  msg: "rCofMsg",  lien: "rCofInt" },
 };
 const nomIntendant = id => REG.intendants.find(i => String(i.id) === String(id))?.nom;
 const optionsZones = choisi => `<option value="">— aucune zone —</option>` +
@@ -817,7 +841,7 @@ function renderReg() {
   renderComptes();
   renderCompagnies();
   // listes "rattaché à" des formulaires d'ajout
-  ["rLieuInt", "rCofInt"].forEach(id => { const g = $(id).value; $(id).innerHTML = optionsZones(g); });
+  renderZones();
   Object.entries(TABLES).forEach(([table, t]) => {
     const rows = REG[table];
     if (!rows.length) { $(t.liste).innerHTML = `<p class="empty">Aucun(e) ${t.nom}.</p>`; return; }
@@ -1281,6 +1305,7 @@ let COMPTES = [];
 async function chargerComptes() {
   const { data, error } = await sb.from("profils").select("id, nom, role, verifie_le, avatar, intendant_id, zones").order("verifie_le", { ascending: false });
   if (!error) COMPTES = data;
+  if (!$("viewReg").hidden) renderZones();
   if (!$("viewReg").hidden) renderComptes();
 }
 function renderComptes() {

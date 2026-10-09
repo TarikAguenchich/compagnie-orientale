@@ -197,3 +197,9 @@ select:disabled{opacity:.75;cursor:not-allowed}
 .cie-tailles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .cie-tailles > div{display:grid;gap:6px;align-content:start}
 @media (max-width:640px){.cie-tailles{grid-template-columns:1fr}.reg-act{white-space:normal}}
+
+/* Réglages : zones */
+.zones td{vertical-align:middle;padding:6px}
+.zones input{min-width:140px}
+.zones .hint{display:block;font-size:.75rem}
+@media (max-width:760px){.zones thead{display:none}.zones tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;border-bottom:1px solid var(--line);padding:8px 0}.zones td{padding:2px}.zones td:first-child{grid-column:1/-1}}
