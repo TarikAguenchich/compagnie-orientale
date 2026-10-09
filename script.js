@@ -62,6 +62,9 @@ let restoring = false;
 function statut(t) { $("dbStatus").textContent = t; }
 let ROLE = null, PROFIL = null;
 const estAdmin = () => ROLE === "admin";
+const estSecretaire = () => ROLE === "secretaire";
+const estZone = () => ROLE === "intendant" || ROLE === "secretaire";   // permanence partagée de la zone
+let ZONE = null;
 
 /* ---------- Chargement depuis Supabase ---------- */
 async function chargerCatalogue() {
@@ -111,9 +114,11 @@ function ecouter() { sb.channel("maj")
   .on("postgres_changes", { event: "*", schema: "public", table: "articles" }, () => { clearTimeout(tCat); tCat = setTimeout(chargerCatalogue, 400); })
   .on("postgres_changes", { event: "*", schema: "public", table: "permanences" }, () => { clearTimeout(tHist); tHist = setTimeout(chargerHist, 400); })
   .on("postgres_changes", { event: "*", schema: "public", table: "profils" }, () => { if (estAdmin()) chargerComptes(); })
+  .on("postgres_changes", { event: "*", schema: "public", table: "brouillon_commandes" }, majZone)
+  .on("postgres_changes", { event: "*", schema: "public", table: "brouillons" }, majZone)
   .subscribe(); }
 // Filet de sécurité : rechargement quand on revient sur l'onglet
-document.addEventListener("visibilitychange", () => { if (!document.hidden && ROLE) { if (!$("viewCtr").hidden) chargerSuivi(); chargerCatalogue(); chargerHist(); chargerReglages(); if (estAdmin()) chargerComptes(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && ROLE) { chargerZone(); if (!$("viewCtr").hidden) chargerSuivi(); chargerCatalogue(); chargerHist(); chargerReglages(); if (estAdmin()) chargerComptes(); } });
 
 /* ---------- Confirmation dans la page ---------- */
 function confirmer(txt) {
@@ -153,32 +158,48 @@ INSTITUTIONS.forEach(n => $("institutions").append(new Option(n)));
 const remplir = (sel, noms, vide) => { sel.innerHTML = ""; if (!noms.length) sel.add(new Option(vide, "")); noms.forEach(n => sel.add(new Option(n, n))); };
 const intendantCourant = () => REG.intendants.find(i => String(i.id) === String(state.intendantId));
 
-const lieuxDe = it => REG.chatelleries.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
-const coffresDe = it => REG.coffres.filter(c => it && String(c.intendant_id) === String(it.id)).map(c => c.nom);
+const parNom = (a, b) => a.localeCompare(b, "fr");
+const lieuxDe = () => REG.chatelleries.map(c => c.nom).sort(parNom);      // admin : toutes
+const coffresDe = () => REG.coffres.map(c => c.nom).sort(parNom);
+const lieuZone = z => REG.chatelleries.filter(c => c.zone_id === z).map(c => c.nom).sort(parNom)[0] || "";
+const coffreZone = z => REG.coffres.filter(c => c.zone_id === z).map(c => c.nom).sort(parNom)[0] || "";
 // Listes de la permanence : châtelleries et coffres de l'intendant choisi
 function majPermanence() {
   const selI = $("intendant");
+  if (estZone()) {
+    // Intendant / secrétaire : la permanence de SA zone, rien à choisir
+    const zs = (PROFIL?.zones || []).map(Number);
+    if (!zs.includes(ZONE)) { let z = null; try { z = Number(localStorage.getItem("zone")); } catch {} ZONE = zs.includes(z) ? z : (zs[0] ?? null); }
+    $("zoneWrap").hidden = zs.length < 2;
+    $("zone").innerHTML = zs.map(z => `<option value="${z}">Zone ${z}</option>`).join("");
+    if (ZONE != null) $("zone").value = ZONE;
+    const lieu = lieuZone(ZONE), cof = coffreZone(ZONE);
+    const nomI = estSecretaire() ? "L'intendant de la zone" : (REG.intendants.find(i => String(i.id) === String(PROFIL?.intendant_id))?.nom || "");
+    state.intendantId = estSecretaire() ? "" : String(PROFIL?.intendant_id ?? "");
+    remplir(selI, nomI ? [nomI] : [], "— intendant pas encore créé —");
+    remplir($("lieu"), lieu ? [lieu] : [], "— aucune châtellerie —");
+    remplir($("coffre"), cof ? [cof] : [], "— aucun coffre —");
+    selI.disabled = $("lieu").disabled = $("coffre").disabled = true;
+    state.lieu = lieu; state.coffre = cof;
+    const bandeau = ZONE == null ? "Aucune zone sur ton compte Discord : reconnecte-toi."
+      : !estSecretaire() && !nomI ? "Ton intendant n'a pas encore été créé : déconnecte-toi puis reconnecte-toi avec Discord."
+      : !lieu || !cof ? `Aucune ${!lieu ? "châtellerie" : ""}${!lieu && !cof ? " ni aucun " : ""}${!cof ? "coffre" : ""} n'est réglé pour la zone ${ZONE} : un administrateur doit le faire dans Réglages. En attendant, vous pouvez préparer les commandes mais pas les transmettre.`
+      : "";
+    $("nonLie").textContent = bandeau;
+    $("nonLie").style.display = bandeau ? "block" : "none";
+    render();
+    return;
+  }
+  // Administrateur : choix libre
   selI.innerHTML = "";
   if (!REG.intendants.length) selI.add(new Option("— aucun intendant (voir Réglages) —", ""));
-  // Un intendant ne peut prendre commande que pour l'intendant rattaché à son compte Discord
-  const lie = !estAdmin() ? PROFIL?.intendant_id : null;
-  const choix = estAdmin() ? REG.intendants : REG.intendants.filter(i => String(i.id) === String(lie));
-  if (!estAdmin() && ROLE && !choix.length) { selI.innerHTML = ""; selI.add(new Option("— compte non rattaché —", "")); }
-  choix.forEach(i => selI.add(new Option(i.nom, i.id)));
-  if (!estAdmin()) state.intendantId = lie ? String(lie) : "";
-  else if (!intendantCourant() && REG.intendants.length) state.intendantId = String(REG.intendants[0].id);
+  REG.intendants.forEach(i => selI.add(new Option(i.nom, i.id)));
+  if (!intendantCourant() && REG.intendants.length) state.intendantId = String(REG.intendants[0].id);
   selI.value = state.intendantId;
-  selI.disabled = !estAdmin();
-  // Bandeau seulement s'il y a vraiment un blocage (le style inline ne dépend pas du CSS)
-  const bandeau = !ROLE || estAdmin() ? ""
-    : !intendantCourant() ? "Ton intendant n'a pas encore été créé : déconnecte-toi puis reconnecte-toi avec Discord."
-    : !lieuxDe(intendantCourant()).length || !coffresDe(intendantCourant()).length
-      ? `Aucune ${!lieuxDe(intendantCourant()).length ? "châtellerie" : ""}${!lieuxDe(intendantCourant()).length && !coffresDe(intendantCourant()).length ? " ni aucun " : ""}${!coffresDe(intendantCourant()).length ? "coffre" : ""} ne t'est encore attribué : un administrateur doit le faire dans Réglages. En attendant, tu peux préparer tes commandes mais pas les transmettre.`
-      : "";
-  $("nonLie").textContent = bandeau;
-  $("nonLie").style.display = bandeau ? "block" : "none";
-  const it = intendantCourant();
-  const lieux = lieuxDe(it), coffres = coffresDe(it);
+  selI.disabled = $("lieu").disabled = $("coffre").disabled = false;
+  $("zoneWrap").hidden = true;
+  $("nonLie").style.display = "none";
+  const lieux = lieuxDe(), coffres = coffresDe();
   remplir($("lieu"), lieux, "— aucune châtellerie —");
   remplir($("coffre"), coffres, "— aucun coffre —");
   if (lieux.includes(state.lieu)) $("lieu").value = state.lieu;
@@ -186,11 +207,39 @@ function majPermanence() {
   state.lieu = $("lieu").value; state.coffre = $("coffre").value; save();
   render();
 }
+
+/* ---------- Permanence partagée de la zone (intendant + secrétaire, en temps réel) ---------- */
+let tZone = null;
+const majZone = () => { clearTimeout(tZone); tZone = setTimeout(chargerZone, 250); };
+async function chargerZone() {
+  if (!estZone() || ZONE == null) return;
+  const z = ZONE;
+  const [c, b] = await Promise.all([
+    sb.from("brouillon_commandes").select("id, commande, cree_le").eq("zone_id", z).order("cree_le"),
+    sb.from("brouillons").select("date").eq("zone_id", z).maybeSingle(),
+  ]);
+  if (z !== ZONE) return;
+  if (c.error) return flash($("sendMsg"), "Permanence partagée indisponible : " + c.error.message + " (as-tu lancé 19_secretaires.sql ?)", false);
+  state.orders = c.data.map(r => r.commande);
+  if (b.data?.date) { state.date = b.data.date; $("date").value = state.date; }
+  if (editId && !state.orders.some(o => o.id === editId)) resetForm();     // supprimée par l'autre personne
+  save(); render();
+}
+$("zone").onchange = () => {
+  ZONE = Number($("zone").value); try { localStorage.setItem("zone", ZONE); } catch {}
+  state.orders = []; resetForm(); majPermanence(); chargerZone();
+};
 $("date").value = state.date || today();
 $("intendant").onchange = () => { state.intendantId = $("intendant").value; majPermanence(); };
 $("lieu").onchange = () => { state.lieu = $("lieu").value; save(); };
 $("coffre").onchange = () => { state.coffre = $("coffre").value; save(); render(); };
-$("date").onchange = () => { state.date = $("date").value; save(); };
+$("date").onchange = async () => {
+  state.date = $("date").value; save();
+  if (estZone() && ZONE != null) {
+    const { error } = await sb.from("brouillons").upsert({ zone_id: ZONE, date: state.date || null, maj_le: new Date().toISOString() });
+    if (error) flash($("sendMsg"), "Date non partagée : " + error.message, false);
+  }
+};
 
 /* ---------- Saisie d'une commande ---------- */
 function remplirSelect(sel, garder, nomGarde) {
@@ -360,7 +409,7 @@ $("cancelEdit").onclick = resetForm;
 
 function flash(el, t, ok) { el.className = "msg " + (ok ? "ok" : "err"); el.textContent = t; if (ok) setTimeout(() => { el.className = "msg"; }, 3000); }
 
-$("saveOrder").onclick = () => {
+$("saveOrder").onclick = async () => {
   const client = $("client").value.trim(), items = lignesForm();
   if (!client) return flash($("formMsg"), "Renseigne le nom du client.", false);
   if (!items.length) return flash($("formMsg"), "Ajoute au moins un article.", false);
@@ -369,8 +418,15 @@ $("saveOrder").onclick = () => {
   const sansVar = items.find(x => ITEM[x.k].variantes && !x.var);
   if (sansVar) return flash($("formMsg"), `Choisis la variante pour « ${sansVar.nom} ».`, false);
   const fig = items.map(x => { const a = ITEM[x.k]; return Object.assign(x, { nom: a.nom, prix: a.prix, fourni: a.fourni || "", cat: a.cat }); });
-  const o = { id: editId || Date.now().toString(36), client, type: $("clientType").value, notes: $("notes").value.trim(), items: fig };
+  const o = { id: editId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5), client, type: $("clientType").value, notes: $("notes").value.trim(), items: fig };
   const edit = !!editId;
+  if (estZone()) {
+    if (ZONE == null) return flash($("formMsg"), "Aucune zone sur ton compte.", false);
+    const maj = { commande: o, maj_le: new Date().toISOString(), maj_par: PROFIL?.nom || null };
+    const { error } = edit ? await sb.from("brouillon_commandes").update(maj).eq("id", o.id)
+                           : await sb.from("brouillon_commandes").insert({ id: o.id, zone_id: ZONE, ...maj });
+    if (error) return flash($("formMsg"), "Commande non enregistrée : " + error.message, false);
+  }
   if (edit) state.orders = state.orders.map(x => x.id === editId ? o : x);
   else state.orders.push(o);
   save();
@@ -424,6 +480,10 @@ function render() {
   box.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
     const o = state.orders.find(x => x.id === b.dataset.d);
     if (!await confirmer(`Supprimer la commande de ${o.client} ?`)) return;
+    if (estZone()) {
+      const { error } = await sb.from("brouillon_commandes").delete().eq("id", o.id);
+      if (error) return flash($("sendMsg"), "Suppression impossible : " + error.message, false);
+    }
     state.orders = state.orders.filter(x => x.id !== b.dataset.d); save();
     if (editId === b.dataset.d) resetForm();
     render();
@@ -449,7 +509,7 @@ Encaissé : ${fmt(totalPerm(p.orders))}`;
 }
 
 function snapshot() {
-  return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), intendant: intendantCourant()?.nom || "", coffre: state.coffre, lieu: state.lieu, date: state.date,
+  return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), intendant: estZone() ? $("intendant").selectedOptions[0]?.text || "" : intendantCourant()?.nom || "", coffre: state.coffre, lieu: state.lieu, date: state.date,
            orders: JSON.parse(JSON.stringify(state.orders)), clotureLe: new Date().toISOString(), discord: false };
 }
 // Les ID de give ne partent jamais du navigateur : la base les retrouve dans le catalogue
@@ -458,9 +518,22 @@ const sansIds = orders => orders.map(o => Object.assign({}, o, { items: o.items.
 $("send").onclick = async () => {
   if (!state.orders.length) return flash($("sendMsg"), "Aucune commande dans cette permanence.", false);
   if (!state.date) return flash($("sendMsg"), "Renseigne la date.", false);
-  if (!intendantCourant()) return flash($("sendMsg"), estAdmin() ? "Choisis l'intendant (à créer dans Réglages s'il n'existe pas)." : "Ton compte n'est rattaché à aucun intendant : demande à un administrateur.", false);
-  if (!state.lieu) return flash($("sendMsg"), estAdmin() ? "Choisis la châtellerie (à rattacher à l'intendant dans Réglages)." : "Aucune châtellerie ne t'est attribuée : demande à un administrateur (Réglages → Châtelleries).", false);
-  if (!state.coffre) return flash($("sendMsg"), estAdmin() ? "Choisis le coffre (à rattacher à l'intendant dans Réglages)." : "Aucun coffre ne t'est attribué : demande à un administrateur (Réglages → Coffres).", false);
+  if (estSecretaire()) return;
+  if (estZone()) {
+    if (!state.lieu || !state.coffre) return flash($("sendMsg"), `La châtellerie ou le coffre de la zone ${ZONE} n'est pas réglé : demande à un administrateur (Réglages).`, false);
+    if (!await confirmer(`Clôturer la permanence de la zone ${ZONE} (${state.orders.length} client(s)) et commander aux administrateurs impériaux ?`)) return;
+    $("send").disabled = true;
+    const { data, error } = await sb.rpc("cloturer_zone", { zone: ZONE, date_: state.date });
+    $("send").disabled = false;
+    if (error) return flash($("sendMsg"), "Impossible de clôturer (" + error.message + "). Rien n'a été envoyé ni effacé, réessaie.", false);
+    editId = null; state.draft = null; resetForm(); await chargerZone(); chargerHist();
+    if (data.discord) flash($("sendMsg"), "Commande transmise aux administrateurs impériaux ✔ Elle est maintenant dans « Commandes en cours ».", true);
+    else flash($("sendMsg"), `Permanence clôturée et archivée, mais pas transmise sur Discord (${data.erreur}). Tu pourras la renvoyer depuis l'onglet Commandes en cours.`, false);
+    return;
+  }
+  if (!intendantCourant()) return flash($("sendMsg"), "Choisis l'intendant (à créer dans Réglages s'il n'existe pas).", false);
+  if (!state.lieu) return flash($("sendMsg"), "Choisis la châtellerie (à créer dans Réglages).", false);
+  if (!state.coffre) return flash($("sendMsg"), "Choisis le coffre (à créer dans Réglages).", false);
   if (!await confirmer(`Clôturer la permanence (${state.orders.length} client(s)) et commander aux administrateurs impériaux ?`)) return;
 
   const p = snapshot();
@@ -486,7 +559,11 @@ $("copy").onclick = () => {
 
 $("reset").onclick = async () => {
   if (!state.orders.length && !$("client").value && !lignesForm().length) return;
-  if (!await confirmer("Effacer toutes les commandes de cette permanence sans rien envoyer ?")) return;
+  if (!await confirmer(estZone() ? `Effacer toutes les commandes de la permanence de la zone ${ZONE} (pour toi et ta zone) sans rien envoyer ?` : "Effacer toutes les commandes de cette permanence sans rien envoyer ?")) return;
+  if (estZone() && state.orders.length) {
+    const { error } = await sb.from("brouillon_commandes").delete().eq("zone_id", ZONE);
+    if (error) return flash($("sendMsg"), "Impossible de vider : " + error.message, false);
+  }
   state.orders = []; state.draft = null; editId = null; save(); resetForm(); render();
 };
 
@@ -538,7 +615,7 @@ function renderHist() {
         <div class="hint">Clôturée le ${new Date(p.clotureLe).toLocaleString("fr-FR")}${p.cloturePar ? " par " + esc(p.cloturePar) : ""}${p.discord && p.envoyeLe ? " — transmise le " + new Date(p.envoyeLe).toLocaleString("fr-FR") : ""}</div>
         <h3>Commandé à l'administration</h3>${htmlRecap(p.orders, p.coffre)}
         <h3>Commandes détaillées</h3>${htmlCommandes(p.orders, false, p.id)}
-        <div class="row" style="margin-top:8px">${p.discord ? "" : `<button class="btn small primary" data-hs="${esc(p.id)}">Transmettre aux administrateurs</button>`}<button class="btn small" data-hc="${esc(p.id)}">Copier le récap</button>${estAdmin() ? `<button class="btn small" data-hd="${esc(p.id)}">Supprimer</button>` : ""}</div>
+        <div class="row" style="margin-top:8px">${p.discord || estSecretaire() ? "" : `<button class="btn small primary" data-hs="${esc(p.id)}">Transmettre aux administrateurs</button>`}<button class="btn small" data-hc="${esc(p.id)}">Copier le récap</button>${estAdmin() ? `<button class="btn small" data-hd="${esc(p.id)}">Supprimer</button>` : ""}</div>
         <div class="msg" id="hm-${esc(p.id)}"></div>
       </div></details>`;
   }).join("");
@@ -731,6 +808,8 @@ const TABLES = {
   coffres:      { nom: "coffre",      liste: "regCof",  champ: "rCof",  msg: "rCofMsg",  lien: "rCofInt" },
 };
 const nomIntendant = id => REG.intendants.find(i => String(i.id) === String(id))?.nom;
+const optionsZones = choisi => `<option value="">— aucune zone —</option>` +
+  [1, 2, 3, 4, 5, 6, 7].map(z => `<option value="${z}" ${String(z) === String(choisi ?? "") ? "selected" : ""}>Zone ${z}</option>`).join("");
 const optionsIntendants = choisi => `<option value="">— aucun —</option>` +
   REG.intendants.map(i => `<option value="${i.id}" ${String(i.id) === String(choisi ?? "") ? "selected" : ""}>${esc(i.nom)}</option>`).join("");
 
@@ -738,33 +817,33 @@ function renderReg() {
   renderComptes();
   renderCompagnies();
   // listes "rattaché à" des formulaires d'ajout
-  ["rLieuInt", "rCofInt"].forEach(id => { const g = $(id).value; $(id).innerHTML = optionsIntendants(g || state.intendantId); });
+  ["rLieuInt", "rCofInt"].forEach(id => { const g = $(id).value; $(id).innerHTML = optionsZones(g); });
   Object.entries(TABLES).forEach(([table, t]) => {
     const rows = REG[table];
     if (!rows.length) { $(t.liste).innerHTML = `<p class="empty">Aucun(e) ${t.nom}.</p>`; return; }
     $(t.liste).innerHTML = `<table><tbody>${rows.map(r => {
       let info = "";
       if (table === "intendants") {
-        const l = REG.chatelleries.filter(c => String(c.intendant_id) === String(r.id)).map(c => c.nom);
-        const c = REG.coffres.filter(c => String(c.intendant_id) === String(r.id)).map(c => c.nom);
-        info = `<span class="hint">${l.length ? esc(l.join(", ")) : "aucune châtellerie"} · ${c.length ? esc(c.join(", ")) : "aucun coffre"}</span>`;
+        const comptes = COMPTES.filter(c => String(c.intendant_id) === String(r.id));
+        const zs = [...new Set(comptes.flatMap(c => c.zones || []))];
+        if (zs.length) info = `<span class="hint">Zone ${zs.join(", ")}</span>`;
       }
       return `<tr class="reg-row"><td><b>${esc(r.nom)}</b>${info ? "<br>" + info : ""}</td>
-        ${t.lien ? `<td class="reg-lien"><select data-lien="${table}|${r.id}">${optionsIntendants(r.intendant_id)}</select></td>` : ""}
+        ${t.lien ? `<td class="reg-lien"><select data-lien="${table}|${r.id}">${optionsZones(r.zone_id)}</select></td>` : ""}
         <td class="act"><button class="btn small" data-rdel="${table}|${r.id}">Supprimer</button></td></tr>`;
     }).join("")}</tbody></table>`;
   });
   $("viewReg").querySelectorAll("[data-lien]").forEach(sel => sel.onchange = async () => {
     const [table, id] = sel.dataset.lien.split("|");
-    const { error } = await sb.from(table).update({ intendant_id: sel.value ? Number(sel.value) : null }).eq("id", id);
-    if (error) return flash($(TABLES[table].msg), "Non enregistré : " + error.message, false);
-    flash($(TABLES[table].msg), "Rattachement enregistré.", true);
+    const { error } = await sb.from(table).update({ zone_id: sel.value ? Number(sel.value) : null }).eq("id", id);
+    if (error) return flash($(TABLES[table].msg), "Non enregistré : " + error.message + " (as-tu lancé 19_secretaires.sql ?)", false);
+    flash($(TABLES[table].msg), "Zone enregistrée.", true);
     await chargerReglages();
   });
   $("viewReg").querySelectorAll("[data-rdel]").forEach(b => b.onclick = async () => {
     const [table, id] = b.dataset.rdel.split("|"), t = TABLES[table];
     const r = REG[table].find(x => String(x.id) === id);
-    const suite = table === "intendants" ? " Ses châtelleries et coffres resteront, sans intendant." : "";
+    const suite = "";
     if (!await confirmer(`Supprimer ${t.nom === "intendant" ? "l'intendant" : t.nom === "coffre" ? "le coffre" : "la châtellerie"} « ${r.nom} » (pour tout le monde) ?${suite} L'historique n'est pas modifié.`)) return;
     const { error } = await sb.from(table).delete().eq("id", id);
     if (error) return flash($(t.msg), "Suppression impossible : " + error.message, false);
@@ -779,7 +858,7 @@ Object.entries(TABLES).forEach(([table, t]) => {
     if (!nom) return flash($(t.msg), "Renseigne le nom.", false);
     if (REG[table].some(x => x.nom.toLowerCase() === nom.toLowerCase())) return flash($(t.msg), `« ${nom} » existe déjà.`, false);
     const ligne = { nom };
-    if (t.lien) ligne.intendant_id = $(t.lien).value ? Number($(t.lien).value) : null;
+    if (t.lien) ligne.zone_id = $(t.lien).value ? Number($(t.lien).value) : null;
     const { error } = await sb.from(table).insert(ligne);
     if (error) return flash($(t.msg), "Non enregistré : " + error.message, false);
     $(t.champ).value = "";
@@ -1200,14 +1279,14 @@ $("cieSave").onclick = async () => {
 /* ---------- Comptes (Réglages, admin) ---------- */
 let COMPTES = [];
 async function chargerComptes() {
-  const { data, error } = await sb.from("profils").select("id, nom, role, verifie_le, avatar, intendant_id").order("verifie_le", { ascending: false });
+  const { data, error } = await sb.from("profils").select("id, nom, role, verifie_le, avatar, intendant_id, zones").order("verifie_le", { ascending: false });
   if (!error) COMPTES = data;
   if (!$("viewReg").hidden) renderComptes();
 }
 function renderComptes() {
-  const libRole = { admin: "Administrateur", intendant: "Intendant" };
+  const libRole = { admin: "Administrateur", intendant: "Intendant", secretaire: "Secrétaire" };
   $("regComptes").innerHTML = COMPTES.length ? `<table><tbody>${COMPTES.map(c => `<tr class="reg-row"><td><b>${esc(c.nom || "?")}</b><br>
-    <span class="hint">${c.role ? libRole[c.role] : "Aucun rôle (accès refusé)"} · vérifié le ${c.verifie_le ? new Date(c.verifie_le).toLocaleString("fr-FR") : "—"}</span></td>
+    <span class="hint">${c.role ? libRole[c.role] : "Aucun rôle (accès refusé)"}${c.role && c.role !== "admin" && c.zones?.length ? " · zone " + c.zones.join(", ") : ""} · vérifié le ${c.verifie_le ? new Date(c.verifie_le).toLocaleString("fr-FR") : "—"}</span></td>
     <td class="reg-lien hint">${c.intendant_id ? "Intendant : <b>" + esc(nomIntendant(c.intendant_id) || "?") + "</b>" : (c.role === "intendant" ? "⚠ pas encore d'intendant (reconnexion)" : "")}</td></tr>`).join("")}</tbody></table>`
     : '<p class="empty">Personne ne s\'est encore connecté.</p>';
 }
@@ -1247,10 +1326,10 @@ async function verifierAcces(session) {
     }
     const [{ data: role }, { data: prof }] = await Promise.all([
       sb.rpc("mon_role"),
-      sb.from("profils").select("nom, avatar, role, intendant_id").eq("id", session.user.id).maybeSingle(),
+      sb.from("profils").select("nom, avatar, role, intendant_id, zones").eq("id", session.user.id).maybeSingle(),
     ]);
     if (!role) return ecranConnexion(prof
-      ? `Connecté en tant que ${prof.nom || "?"}, mais sans le rôle Intendant ou Administrateur sur le serveur Discord (ou ta dernière vérification date de plus de 7 jours : reconnecte-toi).`
+      ? `Connecté en tant que ${prof.nom || "?"}, mais sans accès : il faut le rôle Intendant ou Secrétaire avec un rôle de zone (Zone 1 à 7), ou le rôle Administrateur, sur le serveur Discord (ou ta dernière vérification date de plus de 7 jours : reconnecte-toi).`
       : "Reconnecte-toi avec Discord pour vérifier tes rôles.", true);
     ROLE = role; PROFIL = prof;
     demarrer();
@@ -1265,14 +1344,18 @@ function demarrer() {
   $("login").hidden = true; $("app").hidden = false;
   if (location.hash || location.search.includes("code=")) history.replaceState(null, "", location.pathname);
   $("userName").textContent = PROFIL?.nom || "";
-  $("userRole").textContent = estAdmin() ? "Administrateur" : "Intendant";
+  $("userRole").textContent = estAdmin() ? "Administrateur" : estSecretaire() ? "Secrétaire" : "Intendant";
+  $("send").hidden = estSecretaire();
+  $("secHint").hidden = !estSecretaire();
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
   $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = !estAdmin();
   $("sIntWrap").hidden = !estAdmin();
   $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
   if (demarre) return; demarre = true;
+  if (estZone()) state.orders = [];        // la permanence vient de la base (partagée avec la zone)
   majPermanence(); majFiltres();
   chargerForm(state.draft);
+  chargerZone();
   render();
   let t0 = "perm"; try { t0 = sessionStorage.getItem("tab") || "perm"; } catch {}
   showTab(t0);
