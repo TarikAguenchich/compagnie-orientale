@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261008i">
+<link rel="stylesheet" href="style.css?v=20261009a">
 </head>
 <body>
 <!-- Connexion -->
@@ -231,6 +231,25 @@
       <div id="regCof"></div>
     </div>
     <div class="card">
+      <h2>Compagnies d'exportation <span class="hint" id="cieNb"></span></h2>
+      <p class="hint" style="margin-top:0">Les compagnies cochées « Au tirage » peuvent sortir dans les contrats d'exportation (il en faut au moins 6).</p>
+      <div class="msg" id="cieMsg"></div>
+      <div id="regCie"></div>
+      <div class="cie-form" id="cieForm">
+        <h3 id="cieTitre">Ajouter une compagnie</h3>
+        <div><label for="cieNom">Nom</label><input id="cieNom" placeholder="ex. Comptoir de Gilane" autocomplete="off"></div>
+        <div><label for="ciePlanche" id="ciePlancheAide">Planche complète (les contrats petit, moyen et gros côte à côte, de gauche à droite)</label>
+          <input type="file" id="ciePlanche" accept="image/png,image/webp"></div>
+        <div id="cieApercu" class="cie-apercu"></div>
+        <div class="cie-tailles">
+          <div><b>Petit</b><input type="number" id="ciePrix-petit" min="1" placeholder="Prix en septims"></div>
+          <div><b>Moyen</b><input type="number" id="ciePrix-moyen" min="1" placeholder="Prix en septims"></div>
+          <div><b>Gros</b><input type="number" id="ciePrix-gros" min="1" placeholder="Prix en septims"></div>
+        </div>
+        <div class="row"><button type="button" class="btn primary" id="cieSave">Enregistrer la compagnie</button><button type="button" class="btn" id="cieAnnul" hidden>Annuler</button></div>
+      </div>
+    </div>
+    <div class="card">
       <h2>Comptes connectés</h2>
       <p class="hint" style="margin-top:0">Les droits viennent des rôles Discord, vérifiés à chaque connexion (valables 7 jours). Pour retirer un accès, retire le rôle sur Discord.<br>
       Chaque compte Intendant est ajouté automatiquement à la liste des intendants avec son nom Discord, et renommé s'il change de nom. Il ne te reste qu'à lui attribuer ses <b>châtelleries</b> et son <b>coffre</b>.</p>
@@ -244,6 +263,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261008i"></script>
+<script src="script.js?v=20261009a"></script>
 </body>
 </html>

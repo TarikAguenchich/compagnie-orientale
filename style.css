@@ -184,3 +184,16 @@ select:disabled{opacity:.75;cursor:not-allowed}
 .suivi-actions{margin-top:12px}
 .suivi-actions[hidden]{display:none}
 .suivi-suppr{margin-top:10px;justify-content:flex-end}
+
+/* Compagnies d'exportation (Réglages) */
+.cie-mini{width:34px;height:auto;aspect-ratio:369/1414;object-fit:cover;object-position:top;border-radius:3px;display:block}
+.cie-off{opacity:.55}
+.reg-act{white-space:nowrap;text-align:right}
+.reg-act .liv{display:inline-flex;margin-right:6px}
+.cie-form{border-top:1px solid var(--line);margin-top:14px;padding-top:12px;display:grid;gap:10px}
+.cie-form h3{margin:0;font-family:Cinzel,serif;font-size:1rem}
+.cie-apercu{display:grid;grid-template-columns:repeat(3,minmax(0,110px));gap:10px}
+.cie-apercu:empty{display:none}
+.cie-tailles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cie-tailles > div{display:grid;gap:6px;align-content:start}
+@media (max-width:640px){.cie-tailles{grid-template-columns:1fr}.reg-act{white-space:normal}}

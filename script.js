@@ -131,7 +131,7 @@ function showTab(t) {
   if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr")) t = "perm";
   const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", ctr: "viewCtr", cat: "viewCat", reg: "viewReg" };
   ["viewPerm", "viewHist", "viewStock", "viewCtr", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
-  if (t === "ctr") { majLieuxContrats(); chargerSuivi(); }
+  if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); }
   if (t === "stock") renderStock();
   [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["ctr", "tabCtr"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
@@ -736,6 +736,7 @@ const optionsIntendants = choisi => `<option value="">— aucun —</option>` +
 
 function renderReg() {
   renderComptes();
+  renderCompagnies();
   // listes "rattaché à" des formulaires d'ajout
   ["rLieuInt", "rCofInt"].forEach(id => { const g = $(id).value; $(id).innerHTML = optionsIntendants(g || state.intendantId); });
   Object.entries(TABLES).forEach(([table, t]) => {
@@ -844,114 +845,25 @@ function renderStock() {
 
 /* ---------- Contrats d'exportation (admin) ---------- */
 // Images : dossiers du site (GitHub) — contrats/<slug>-<taille>.jpg et sceaux/<ville>.png
-const imgContrat = c => `contrats/${c.slug}-${c.taille}.jpg`;
+const imgContrat = c => {
+  const k = COMPAGNIES.find(x => x.slug === c.slug);
+  const surSite = k ? k.images === "site" : SLUGS_SITE.includes(c.slug);
+  return surSite ? `contrats/${c.slug}-${c.taille}.jpg`
+    : `${SUPABASE_URL}/storage/v1/object/public/contrats/modeles/${c.slug}-${c.taille}.jpg` + (k ? "?v=" + Date.parse(k.maj_le) : "");
+};
 const imgSceau = v => `sceaux/${SCEAUX[cleVille(v)]}.png`;
-const COMPAGNIES = [
-  { slug: "brasserie",  nom: "Brasserie Noire-Bruyère", contrats: {
-      petit: { prix: 4000,  lignes: ["Bière x 200", "Vin x 100", "Hydromel x 30"] },
-      moyen: { prix: 12000, lignes: ["Bière x 600", "Vin x 300", "Hydromel x 100"] },
-      gros:  { prix: 24000, lignes: ["Bière x 1200", "Vin x 600", "Hydromel x 200"] } } },
-  { slug: "marchands",  nom: "Bureau des marchands Impériaux", contrats: {
-      petit: { prix: 3000,  lignes: ["Cuir x 300", "Peau d'Ours x 15", "Peau de loup x 15", "Peau de renard x 15"] },
-      moyen: { prix: 12000, lignes: ["Cuir x 1200", "Peau d'Ours x 60", "Peau de loup x 60", "Peau de renard x 60"] },
-      gros:  { prix: 24000, lignes: ["Cuir x 2400", "Peau d'Ours x 120", "Peau de loup x 120", "Peau de renard x 120"] } } },
-  { slug: "leyawiin",   nom: "Caravane de Leyawiin", contrats: {
-      petit: { prix: 4000,  lignes: ["Lingot d'Acier x 200"] },
-      moyen: { prix: 15000, lignes: ["Lingot d'Acier x 750"] },
-      gros:  { prix: 30000, lignes: ["Lingot d'Acier x 1500"] } } },
-  { slug: "corberoc",   nom: "Cité de Corberoc", contrats: {
-      petit: { prix: 3250,  lignes: ["Pioche x 25", "Hache de Bucheron x 25", "Clef x 25", "Petit Bois x 250"] },
-      moyen: { prix: 14000, lignes: ["Pioche x 100", "Hache de Bucheron x 100", "Clef x 100", "Petit bois x 250"] },
-      gros:  { prix: 28000, lignes: ["Pioche x 200", "Hache de Bucheron x 200", "Clef x 200", "Petit bois x 2000"] } } },
-  { slug: "cote-dor",   nom: "Compagnie commerciale de la côte d'Or", contrats: {
-      petit: { prix: 3500,  lignes: ["Peau de Smilodon x 200", "Peau de Cerfs x 200", "Défense de Horqueurs x 250"] },
-      moyen: { prix: 12000, lignes: ["Peau de Smilodon x 500", "Peau de Cerfs x 500", "Défense de Horqueurs x 750"] },
-      gros:  { prix: 24000, lignes: ["Peau de Smilodon x 1000", "Peau de Cerfs x 1000", "Défense de Horqueurs x 1500"] } } },
-  { slug: "chendinhal", nom: "Comptoir de Chendinhal", contrats: {
-      petit: { prix: 2500,  lignes: ["Meule de Fromage x 100", "Tarte aux pommes x 100"] },
-      moyen: { prix: 10000, lignes: ["Meule de Fromage x 400", "Tarte aux pommes x 400"] },
-      gros:  { prix: 20000, lignes: ["Meule de Fromage x 800", "Tarte aux pommes x 800"] } } },
-  { slug: "garnison-bruma", nom: "Garnison de Bruma", contrats: {
-      petit: { prix: 2000, lignes: ["Plastron d'Acier x 5", "Bottes d'Acier x 5", "Casque d'Acier x 5", "Gantelets d'Acier x 5"] },
-      moyen: { prix: 10000, lignes: ["Plastron d'Acier x 25", "Bottes d'Acier x 25", "Casque d'Acier x 25", "Gantelets d'Acier x 25"] },
-      gros:  { prix: 20000, lignes: ["Plastron d'Acier x 50", "Bottes d'Acier x 50", "Casque d'Acier x 50", "Gantelets d'Acier x 50"] } } },
-  { slug: "gilane", nom: "Comptoir de Gilane", contrats: {
-      petit: { prix: 3000, lignes: ["Potion de guerrier x 100", "Potion de berserker x 100"] },
-      moyen: { prix: 12000, lignes: ["Potion de guerrier x 400", "Potion de berserker x 400"] },
-      gros:  { prix: 24000, lignes: ["Potion de guerrier x 800", "Potion de berserker x 800"] } } },
-  { slug: "clairetoison", nom: "Comptoir de la famille Clairetoison", contrats: {
-      petit: { prix: 4000, lignes: ["Gourde x 4000"] },
-      moyen: { prix: 12000, lignes: ["Gourde x 12000"] },
-      gros:  { prix: 24000, lignes: ["Gourde x 24000"] } } },
-  { slug: "val-boise", nom: "Comptoir du Val-Boisé", contrats: {
-      petit: { prix: 2500, lignes: ["Viande de Boeuf x 500", "Venaison x 500"] },
-      moyen: { prix: 12500, lignes: ["Viande de Boeuf x 2500", "Venaison x 2500"] },
-      gros:  { prix: 25000, lignes: ["Viande de Boeuf x 5000", "Venaison x 5000"] } } },
-  { slug: "tourbevase", nom: "Comptoir Tourbevase", contrats: {
-      petit: { prix: 4000, lignes: ["Émeraude x 20", "Saphir x 100", "Rubis x 100", "Grenat x 200", "Améthyste x 200"] },
-      moyen: { prix: 12000, lignes: ["Émeraude x 60", "Saphir x 300", "Rubis x 300", "Grenat x 600", "Améthyste x 600"] },
-      gros:  { prix: 24000, lignes: ["Émeraude x 120", "Saphir x 600", "Rubis x 600", "Grenat x 1200", "Améthyste x 600"] } } },
-  { slug: "aubeneuve", nom: "Confédération des Forgerons d'Aubeneuve", contrats: {
-      petit: { prix: 2500, lignes: ["Lingot d'Orichalque x 50"] },
-      moyen: { prix: 10000, lignes: ["Lingot d'Orichalque x 200"] },
-      gros:  { prix: 20000, lignes: ["Lingot d'Orichalque x 400"] } } },
-  { slug: "cyrodiil", nom: "Confrérie de l'Acier de Cyrodiil", contrats: {
-      petit: { prix: 3500, lignes: ["Minerai de Fer x 5000"] },
-      moyen: { prix: 10000, lignes: ["Minerai de Fer x 15000"] },
-      gros:  { prix: 20000, lignes: ["Minerai de Fer x 30000"] } } },
-  { slug: "senchal", nom: "Consortium des Sucreries de Senchal", contrats: {
-      petit: { prix: 3000, lignes: ["Patate x 1250", "Choux x 1250", "Tomate x 1250", "Poireau x 1250"] },
-      moyen: { prix: 15000, lignes: ["Patate x 6250", "Choux x 6250", "Tomate x 6250", "Poireau x 6250"] },
-      gros:  { prix: 30000, lignes: ["Patate x 12500", "Choux x 12500", "Tomate x 12500", "Poireau x 12500"] } } },
-  { slug: "elegance", nom: "Élégance Divine, Tailleur Impérial", contrats: {
-      petit: { prix: 4000, lignes: ["Bottes x 50", "Cape de Fourrure x 25", "Vêtements Nobles x 10"] },
-      moyen: { prix: 12000, lignes: ["Bottes x 150", "Cape de Fourrure x 75", "Vêtements Nobles x 30"] },
-      gros:  { prix: 24000, lignes: ["Bottes x 300", "Cape de Fourrure x 150", "Vêtements Nobles x 60"] } } },
-  { slug: "miniere-bruma", nom: "Guilde Minière de Bruma", contrats: {
-      petit: { prix: 4000, lignes: ["Minerai d'Argent x 1500"] },
-      moyen: { prix: 14000, lignes: ["Minerai d'Argent x 5000"] },
-      gros:  { prix: 28000, lignes: ["Minerai d'Argent x 10000"] } } },
-  { slug: "scorpion", nom: "Les Comptoirs du Scorpion d'Or", contrats: {
-      petit: { prix: 4000, lignes: ["Potion de soin mineur x 300"] },
-      moyen: { prix: 12000, lignes: ["Potion de soin mineur x 900"] },
-      gros:  { prix: 24000, lignes: ["Potion de soin mineur x 1800"] } } },
-  { slug: "alinor", nom: "Maison des Tisserands d'Alinor", contrats: {
-      petit: { prix: 4000, lignes: ["Bobine de Fil x 5000"] },
-      moyen: { prix: 12000, lignes: ["Bobine de Fil x 15000"] },
-      gros:  { prix: 24000, lignes: ["Bobine de Fil x 30000"] } } },
-  { slug: "sentinelle", nom: "Maison Marchande de Sentinelle", contrats: {
-      petit: { prix: 4000, lignes: ["Lingot de Vif Argent x 20"] },
-      moyen: { prix: 20000, lignes: ["Lingot de Vif Argent x 50"] },
-      gros:  { prix: 30000, lignes: ["Lingot de Vif Argent x 150"] } } },
-  { slug: "redoran", nom: "Maison Redoran de Balmora", contrats: {
-      petit: { prix: 2000, lignes: ["Flèche d'Acier x 800", "Arc Commun x 10"] },
-      moyen: { prix: 10000, lignes: ["Flèche d'Acier x 4000", "Arc Commun x 50"] },
-      gros:  { prix: 20000, lignes: ["Flèche d'Acier x 8000", "Arc Commun x 100"] } } },
-  { slug: "telvanni", nom: "Maison Telvanni", contrats: {
-      petit: { prix: 3000, lignes: ["Gemmes spirituelles (vides) x 150"] },
-      moyen: { prix: 13000, lignes: ["Gemmes spirituelles (vides) x 500"] },
-      gros:  { prix: 26000, lignes: ["Gemmes spirituelles (vides) x 1000"] } } },
-  { slug: "chornol", nom: "Marché de Chornol", contrats: {
-      petit: { prix: 3500, lignes: ["Espadon en Acier x 5", "Marteau en Acier x 5", "Hache d'armes en Acier x 5", "Épée en Acier x 5", "Hache en Acier x 5", "Masse en Acier x 5"] },
-      moyen: { prix: 10000, lignes: ["Espadon en Acier x 20", "Marteau en Acier x 20", "Hache d'armes en Acier x 20", "Épée en Acier x 20", "Hache en Acier x 20", "Masse en Acier x 20"] },
-      gros:  { prix: 20000, lignes: ["Espadon en Acier x 40", "Marteau en Acier x 40", "Hache d'armes en Acier x 40", "Épée en Acier x 40", "Hache en Acier x 40", "Masse en Acier x 40"] } } },
-  { slug: "dhalmora", nom: "Musée de Dhalmora", contrats: {
-      petit: { prix: 4000, lignes: ["Lingot Dwemer x 50"] },
-      moyen: { prix: 12000, lignes: ["Lingot Dwemer x 150"] },
-      gros:  { prix: 30000, lignes: ["Lingot Dwemer x 300"] } } },
-  { slug: "necrom", nom: "Nécropole de Necrom", contrats: {
-      petit: { prix: 4000, lignes: ["Lys des cimes rouges x 4000", "Lys des cimes bleus x 4000", "Lys des cimes violettes x 4000", "Pied de lutin x 1250"] },
-      moyen: { prix: 12000, lignes: ["Lys des cimes rouges x 12000", "Lys des cimes bleus x 12000", "Lys des cimes violettes x 12000", "Pied de lutin x 3750"] },
-      gros:  { prix: 24000, lignes: ["Lys des cimes rouges x 24000", "Lys des cimes bleus x 24000", "Lys des cimes violettes x 24000", "Pied de lutin x 7500"] } } },
-  { slug: "rihad", nom: "Quai de Rihad", contrats: {
-      petit: { prix: 2500, lignes: ["Patte de Lapin x 400", "Patte de Vasard x 400", "Patte de Chèvre x 400", "Grande ramure x 400", "Griffe d'Ours x 400"] },
-      moyen: { prix: 10000, lignes: ["Patte de Lapin x 1600", "Patte de Vasard x 1600", "Patte de Chèvre x 1600", "Grande ramure x 1600", "Griffe d'Ours x 1600"] },
-      gros:  { prix: 20000, lignes: ["Patte de Lapin x 3200", "Patte de Vasard x 3200", "Patte de Chèvre x 3200", "Grande ramure x 3200", "Griffe d'Ours x 3200"] } } },
-  { slug: "daguefilante", nom: "Guilde des Armuriers de Daguefilante", contrats: {
-      petit: { prix: 4000, lignes: ["Charbon pauvre x 1000", "Charbon classique x 500"] },
-      moyen: { prix: 12000, lignes: ["Charbon pauvre x 3000", "Charbon classique x 1500"] },
-      gros:  { prix: 24000, lignes: ["Charbon pauvre x 6000", "Charbon classique x 3000"] } } },
-];
+// Compagnies : table Supabase « compagnies » (Réglages > Compagnies d'exportation, admin)
+let COMPAGNIES = [];
+// les 26 premières ont leurs images dans le dossier contrats/ du site ; les autres dans Supabase
+const SLUGS_SITE = ["brasserie", "marchands", "leyawiin", "corberoc", "cote-dor", "chendinhal", "garnison-bruma", "gilane",
+  "clairetoison", "val-boise", "tourbevase", "aubeneuve", "cyrodiil", "senchal", "elegance", "miniere-bruma", "scorpion",
+  "alinor", "sentinelle", "redoran", "telvanni", "chornol", "dhalmora", "necrom", "rihad", "daguefilante"];
+async function chargerCompagnies() {
+  const { data, error } = await sb.from("compagnies").select("*").order("ordre").order("nom");
+  if (error) { flash($("ctrMsg"), "Compagnies indisponibles : " + error.message + " (as-tu lancé 18_compagnies.sql ?)", false); return; }
+  COMPAGNIES = data || [];
+  if (!$("viewReg").hidden) renderCompagnies();
+}
 const TIRAGE = ["gros", "moyen", "moyen", "petit", "petit", "petit"];
 const LIB_TAILLE = { gros: "Gros contrat", moyen: "Contrat moyen", petit: "Petit contrat" };
 let tirage = null;
@@ -967,7 +879,8 @@ async function majLieuxContrats() {
 }
 function genererContrats() {
   // une compagnie différente par contrat, tirée au hasard
-  const melange = COMPAGNIES.slice();
+  const melange = COMPAGNIES.filter(c => c.actif);
+  if (melange.length < TIRAGE.length) { flash($("ctrMsg"), `Il faut au moins ${TIRAGE.length} compagnies actives (Réglages) : il y en a ${melange.length}.`, false); return false; }
   for (let i = melange.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [melange[i], melange[j]] = [melange[j], melange[i]]; }
   tirage = { lieu: $("ctrLieu").value, contrats: TIRAGE.map((taille, i) => {
     const c = melange[i % melange.length];
@@ -981,7 +894,7 @@ function genererContrats() {
   $("ctrApercu").hidden = false;
   $("ctrMsg").className = "msg";
 }
-$("ctrGen").onclick = () => { if (!$("ctrLieu").value) return flash($("ctrMsg"), "Aucune ville n'a de webhook : renseigne-le dans la table chatellerie_discord.", false); genererContrats(); $("ctrApercu").scrollIntoView({ behavior: "smooth" }); };
+$("ctrGen").onclick = () => { if (!$("ctrLieu").value) return flash($("ctrMsg"), "Aucune ville n'a de webhook : renseigne-le dans la table chatellerie_discord.", false); if (genererContrats() !== false) $("ctrApercu").scrollIntoView({ behavior: "smooth" }); };
 $("ctrRegen").onclick = genererContrats;
 // Sceaux des villes (dossier sceaux/ du site : <ville sans accent>.png)
 // ville (sans accent ni tiret) -> nom du fichier dans sceaux/
@@ -996,6 +909,7 @@ const ANGLES = [-8, 6, -4, 9, -10, 5];          // inclinaison du sceau, comme u
 const SCEAU_Y = 0.835, SCEAU_L = 0.62;          // centre (hauteur) et largeur du sceau dans un contrat
 const chargerImage = src => new Promise((ok, ko) => {
   const im = new Image();
+  im.crossOrigin = "anonymous";            // images Supabase : nécessaire pour assembler l'image
   im.onload = () => ok(im);
   im.onerror = () => ko(new Error("image introuvable : " + src.split("/").pop() + ""));
   im.src = src;
@@ -1162,6 +1076,127 @@ async function enregistrerSuivi(bloc, e) {
   }
 }
 
+/* ---------- Compagnies d'exportation (Réglages, admin) ---------- */
+// Planche complète (colonnes côte à côte sur fond transparent) -> 3 contrats : petit, moyen, gros
+const TAILLES = ["petit", "moyen", "gros"];
+let PLANCHE = null;          // { petit: Blob, moyen: Blob, gros: Blob } découpés
+let CIE_EDIT = null;         // slug de la compagnie en cours de modification
+const slugDe = nom => sansAccent(nom).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+async function decouperPlanche(fichier) {
+  const url = URL.createObjectURL(fichier);
+  try {
+    const im = await chargerImage(url);
+    const W = im.naturalWidth, H = im.naturalHeight;
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d"); ctx.drawImage(im, 0, 0);
+    const px = ctx.getImageData(0, 0, W, H).data;
+    // une colonne de pixels appartient à un contrat si elle est opaque sur plus de la moitié de sa hauteur
+    const pleine = x => { let n = 0; for (let y = 0; y < H; y += 2) if (px[(y * W + x) * 4 + 3] > 200) n++; return n > H / 4; };
+    const bandes = []; let debut = null;
+    for (let x = 0; x <= W; x++) {
+      const p = x < W && pleine(x);
+      if (p && debut === null) debut = x;
+      if (!p && debut !== null) { if (x - debut > W / 20) bandes.push([debut, x]); debut = null; }
+    }
+    if (bandes.length < 3) throw new Error(`je ne trouve que ${bandes.length} contrat(s) sur la planche (il en faut 3 : petit, moyen, gros, de gauche à droite)`);
+    const res = {};
+    await Promise.all(bandes.slice(0, 3).map(([x0, x1], i) => {
+      const c = document.createElement("canvas"); c.width = x1 - x0; c.height = H;
+      const k = c.getContext("2d"); k.fillStyle = "#1b1a22"; k.fillRect(0, 0, c.width, H);
+      k.drawImage(cv, x0, 0, x1 - x0, H, 0, 0, x1 - x0, H);
+      return new Promise(ok => c.toBlob(b => { res[TAILLES[i]] = b; ok(); }, "image/jpeg", 0.88));
+    }));
+    return res;
+  } finally { URL.revokeObjectURL(url); }
+}
+function renderCompagnies() {
+  if (!$("regCie")) return;
+  $("regCie").innerHTML = COMPAGNIES.length ? `<table><tbody>${COMPAGNIES.map(c => `<tr class="reg-row${c.actif ? "" : " cie-off"}">
+      <td><img class="cie-mini" src="${imgContrat({ slug: c.slug, taille: "petit" })}" alt="" loading="lazy"></td>
+      <td><b>${esc(c.nom)}</b><br><span class="hint">${TAILLES.map(t => fmt(c.contrats?.[t]?.prix)).join(" · ")}${c.actif ? "" : " — désactivée"}</span></td>
+      <td class="reg-act"><label class="liv"><input type="checkbox" data-cie-actif="${esc(c.slug)}" ${c.actif ? "checked" : ""}> Au tirage</label>
+        <button type="button" class="btn small" data-cie-edit="${esc(c.slug)}">Modifier</button>
+        <button type="button" class="btn small" data-cie-suppr="${esc(c.slug)}">Supprimer</button></td></tr>`).join("")}</tbody></table>`
+    : '<p class="empty">Aucune compagnie.</p>';
+  $("cieNb").textContent = `${COMPAGNIES.filter(c => c.actif).length} au tirage sur ${COMPAGNIES.length}`;
+  $("regCie").querySelectorAll("[data-cie-actif]").forEach(c => c.onchange = async () => {
+    const { error } = await sb.from("compagnies").update({ actif: c.checked, maj_le: new Date().toISOString() }).eq("slug", c.dataset.cieActif);
+    if (error) flash($("cieMsg"), "Impossible : " + error.message, false);
+    chargerCompagnies();
+  });
+  $("regCie").querySelectorAll("[data-cie-edit]").forEach(b => b.onclick = () => editerCompagnie(b.dataset.cieEdit));
+  $("regCie").querySelectorAll("[data-cie-suppr]").forEach(b => b.onclick = async () => {
+    const c = COMPAGNIES.find(x => x.slug === b.dataset.cieSuppr);
+    if (!await confirmer(`Supprimer la compagnie « ${c.nom} » ? Elle ne sortira plus au tirage (les contrats déjà envoyés restent visibles).`)) return;
+    const { error } = await sb.from("compagnies").delete().eq("slug", c.slug);
+    flash($("cieMsg"), error ? "Impossible : " + error.message : `${c.nom} supprimée ✔`, !error);
+    chargerCompagnies();
+  });
+}
+function viderFormCie() {
+  CIE_EDIT = null; PLANCHE = null;
+  $("cieNom").value = ""; $("ciePlanche").value = ""; $("cieApercu").innerHTML = "";
+  TAILLES.forEach(t => { $("ciePrix-" + t).value = ""; });
+  $("cieTitre").textContent = "Ajouter une compagnie"; $("cieAnnul").hidden = true;
+  $("ciePlancheAide").textContent = "Planche complète (les contrats petit, moyen et gros côte à côte, de gauche à droite)";
+}
+function editerCompagnie(slug) {
+  const c = COMPAGNIES.find(x => x.slug === slug); if (!c) return;
+  viderFormCie(); CIE_EDIT = slug;
+  $("cieNom").value = c.nom;
+  TAILLES.forEach(t => { $("ciePrix-" + t).value = c.contrats?.[t]?.prix ?? ""; });
+  $("cieApercu").innerHTML = TAILLES.map(t => `<figure class="ctr"><figcaption><b>${t}</b></figcaption><img src="${imgContrat({ slug, taille: t })}" alt=""></figure>`).join("");
+  $("cieTitre").textContent = "Modifier : " + c.nom; $("cieAnnul").hidden = false;
+  $("ciePlancheAide").textContent = "Nouvelle planche (facultatif : laisse vide pour garder les images actuelles)";
+  $("cieForm").scrollIntoView({ behavior: "smooth" });
+}
+$("cieAnnul").onclick = viderFormCie;
+$("ciePlanche").onchange = async () => {
+  const f = $("ciePlanche").files[0]; PLANCHE = null; $("cieApercu").innerHTML = "";
+  if (!f) return;
+  try {
+    PLANCHE = await decouperPlanche(f);
+    $("cieApercu").innerHTML = TAILLES.map(t => `<figure class="ctr"><figcaption><b>${t}</b></figcaption><img src="${URL.createObjectURL(PLANCHE[t])}" alt=""></figure>`).join("");
+  } catch (e) { flash($("cieMsg"), "Découpage impossible : " + e.message, false); $("ciePlanche").value = ""; }
+};
+$("cieSave").onclick = async () => {
+  const nom = $("cieNom").value.trim();
+  if (!nom) return flash($("cieMsg"), "Donne un nom à la compagnie.", false);
+  const contrats = {};
+  for (const t of TAILLES) {
+    const prix = Math.round(Number($("ciePrix-" + t).value));
+    if (!(prix > 0)) return flash($("cieMsg"), `Prix du contrat ${t} manquant.`, false);
+    // les articles sont lus sur l'image : on garde ceux déjà connus pour les anciennes compagnies
+    contrats[t] = { prix, lignes: COMPAGNIES.find(c => c.slug === CIE_EDIT)?.contrats?.[t]?.lignes || [] };
+  }
+  let slug = CIE_EDIT;
+  if (!slug) {
+    slug = slugDe(nom) || "compagnie";
+    let n = 2, base = slug; while (COMPAGNIES.some(c => c.slug === slug)) slug = `${base}-${n++}`;
+    if (!PLANCHE) return flash($("cieMsg"), "Ajoute la planche des contrats.", false);
+  }
+  $("cieSave").disabled = true;
+  try {
+    const ligne = { slug, nom, contrats, maj_le: new Date().toISOString() };
+    if (PLANCHE) {
+      for (const t of TAILLES) {
+        const { error } = await sb.storage.from("contrats").upload(`modeles/${slug}-${t}.jpg`, PLANCHE[t], { contentType: "image/jpeg", upsert: true, cacheControl: "60" });
+        if (error) throw new Error("dépôt de l'image " + t + " impossible (" + error.message + ")");
+      }
+      ligne.images = "supabase";
+    }
+    const { error } = CIE_EDIT
+      ? await sb.from("compagnies").update(ligne).eq("slug", slug)
+      : await sb.from("compagnies").insert({ ...ligne, images: "supabase", actif: true, ordre: 1000 + COMPAGNIES.length });
+    if (error) throw new Error(error.message);
+    flash($("cieMsg"), `${nom} ${CIE_EDIT ? "modifiée" : "ajoutée"} ✔`, true);
+    viderFormCie();
+    await chargerCompagnies();
+  } catch (e) {
+    flash($("cieMsg"), "Enregistrement impossible : " + e.message, false);
+  } finally { $("cieSave").disabled = false; }
+};
+
 /* ---------- Comptes (Réglages, admin) ---------- */
 let COMPTES = [];
 async function chargerComptes() {
@@ -1243,7 +1278,7 @@ function demarrer() {
   showTab(t0);
   ecouter();
   chargerReglages(); chargerCatalogue(); chargerHist();
-  if (estAdmin()) chargerComptes();
+  if (estAdmin()) { chargerComptes(); chargerCompagnies(); }
 }
 
 /* ---------- Démarrage ---------- */
