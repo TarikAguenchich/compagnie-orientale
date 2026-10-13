@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261013c">
+<link rel="stylesheet" href="style.css?v=20261013d">
 </head>
 <body>
 <!-- Connexion -->
@@ -35,6 +35,7 @@
     <button type="button" id="tabHist">Historique</button>
     <button type="button" id="tabStock">Stock</button>
     <button type="button" id="tabCtr" hidden>Contrats d'exportation</button>
+    <button type="button" id="tabCpt" hidden>Compta</button>
     <button type="button" id="tabCat" hidden>Catalogue</button>
     <button type="button" id="tabReg" hidden>Réglages</button>
   </nav>
@@ -163,6 +164,59 @@
     </div>
   </div>
 
+  <!-- Compta des coffres (admin) -->
+  <div id="viewCpt" hidden>
+    <div class="filters filters4">
+      <div><label for="kPer">Période</label><select id="kPer">
+        <option value="semaine">Cette semaine</option><option value="mois" selected>Ce mois-ci</option>
+        <option value="moisPrec">Le mois dernier</option><option value="tout">Depuis le début</option><option value="perso">Dates au choix…</option></select></div>
+      <div id="kDuWrap" hidden><label for="kDu">Du</label><input type="date" id="kDu"></div>
+      <div id="kAuWrap" hidden><label for="kAu">Au</label><input type="date" id="kAu"></div>
+      <div><label for="kZone">Zone</label><select id="kZone"><option value="">Toutes</option></select></div>
+    </div>
+    <div class="msg" id="kMsg" style="margin:0 0 12px"></div>
+
+    <div class="card">
+      <h2>Coffres des zones <button type="button" class="btn small" id="kMaj" style="margin-left:auto">Actualiser</button></h2>
+      <p class="hint" style="margin-top:0">Le <b>solde</b> est ce qu'il y a dans le coffre aujourd'hui (tout l'historique). Entrées et sorties : sur la période choisie.<br>
+      Entrées = commandes <b>payées</b>. Sorties = contrats d'export réalisés (le coffre paie le prix et reçoit les ressources) + loyer du pied-à-terre chaque lundi.</p>
+      <div id="kCoffres" class="k-coffres"></div>
+    </div>
+
+    <div class="card">
+      <h2>Statistiques <span class="hint" id="kStatPer"></span></h2>
+      <div id="kStats"></div>
+    </div>
+
+    <div class="card">
+      <h2>Entrées / sorties <span class="badge" id="kNb">0</span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <div style="min-width:200px"><label for="kType">Type</label><select id="kType"><option value="">Tous</option>
+          <option value="commande">Commandes payées</option><option value="contrat">Contrats d'export</option><option value="loyer">Loyers</option><option value="manuel">Manuels</option></select></div>
+      </div>
+      <div id="kJournal"></div>
+      <h3 class="k-titre">Ajouter un mouvement manuel</h3>
+      <p class="hint" style="margin-top:0">Correction, retrait, revente de ressources… Indique un montant et/ou une ressource avec sa quantité.</p>
+      <div class="k-form">
+        <div><label for="mZone">Zone</label><select id="mZone"></select></div>
+        <div><label for="mSens">Sens</label><select id="mSens"><option value="1">Entrée</option><option value="-1">Sortie</option></select></div>
+        <div><label for="mMontant">Septims</label><input type="number" id="mMontant" min="0" step="1" placeholder="0"></div>
+        <div class="k-lib"><label for="mLib">Libellé</label><input id="mLib" placeholder="ex. Achat de mobilier" autocomplete="off"></div>
+        <div><label for="mRes">Ressource <span class="hint">(facultatif)</span></label><input id="mRes" placeholder="ex. Bière" autocomplete="off" list="kResList"><datalist id="kResList"></datalist></div>
+        <div><label for="mQte">Quantité</label><input type="number" id="mQte" min="0" step="1" placeholder="0"></div>
+      </div>
+      <div class="row" style="margin-top:10px"><button type="button" class="btn primary" id="mAdd">Ajouter</button></div>
+      <div class="msg" id="mMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Loyers des pieds-à-terre</h2>
+      <p class="hint" style="margin-top:0">Montant prélevé <b>chaque lundi</b> sur le coffre de la zone. Un changement s'applique à partir d'aujourd'hui (les semaines passées gardent l'ancien montant). 0 = pas de loyer.</p>
+      <div class="msg" id="lMsg"></div>
+      <div id="kLoyers"></div>
+    </div>
+  </div>
+
   <!-- Catalogue -->
   <div id="viewCat" hidden>
     <div class="card" id="catFormCard">
@@ -263,6 +317,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261013c"></script>
+<script src="script.js?v=20261013d"></script>
 </body>
 </html>

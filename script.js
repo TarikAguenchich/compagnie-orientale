@@ -105,6 +105,7 @@ async function chargerReglages() {
   try { localStorage.setItem("reglages_cache", JSON.stringify(REG)); } catch {}
   majPermanence(); majFiltres();
   if (!$("viewReg").hidden) renderReg();
+  if (!$("viewCpt").hidden && KJ) renderCompta();
 }
 
 // Les autres pages ouvertes se mettent à jour toutes seules
@@ -137,12 +138,13 @@ function confirmer(txt) {
 /* ---------- Onglets ---------- */
 let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
-  if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr")) t = "perm";
-  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", ctr: "viewCtr", cat: "viewCat", reg: "viewReg" };
-  ["viewPerm", "viewHist", "viewStock", "viewCtr", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
+  if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr" || t === "cpt")) t = "perm";
+  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", ctr: "viewCtr", cpt: "viewCpt", cat: "viewCat", reg: "viewReg" };
+  ["viewPerm", "viewHist", "viewStock", "viewCtr", "viewCpt", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
   if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); }
   if (t === "stock") renderStock();
-  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["ctr", "tabCtr"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
+  if (t === "cpt") chargerCompta();
+  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["ctr", "tabCtr"], ["cpt", "tabCpt"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
   if (t === "cat") renderCat();
   if (t === "reg") renderReg();
@@ -153,6 +155,7 @@ $("tabHist").onclick = () => showTab("hist");
 $("tabEnc").onclick = () => showTab("enc");
 $("tabStock").onclick = () => showTab("stock");
 $("tabCtr").onclick = () => showTab("ctr");
+$("tabCpt").onclick = () => showTab("cpt");
 $("tabCat").onclick = () => showTab("cat");
 $("tabReg").onclick = () => showTab("reg");
 
@@ -1097,7 +1100,7 @@ $("ctrEnvoi").onclick = async () => {
   try {
     await appelContrats({
       action: "envoyer", lieu: tirage.lieu,
-      contrats: tirage.contrats.map(({ slug, taille, nom, prix }) => ({ slug, taille, nom, prix })),
+      contrats: tirage.contrats.map(({ slug, taille, nom, prix, lignes }) => ({ slug, taille, nom, prix, lignes: lignes || [] })),   // lignes : ressources perçues (compta)
     }, await imageContrats(tirage.contrats));
     flash($("ctrMsg"), `Contrats envoyés sur Discord pour ${tirage.lieu} ✔`, true);
     $("ctrApercu").hidden = true; tirage = null;
@@ -1397,7 +1400,7 @@ function demarrer() {
   $("send").hidden = estSecretaire();
   $("secHint").hidden = !estSecretaire();
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
-  $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = !estAdmin();
+  $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = $("tabCpt").hidden = !estAdmin();
   $("sIntWrap").hidden = !estAdmin();
   $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
   if (demarre) return; demarre = true;
@@ -1412,6 +1415,176 @@ function demarrer() {
   chargerReglages(); chargerCatalogue(); chargerHist();
   if (estAdmin()) { chargerComptes(); chargerCompagnies(); }
 }
+
+/* ---------- Compta des coffres (admin) : entrées / sorties, soldes, stats, loyers ---------- */
+var KJ = null, KLOY = [];            // journal complet (rpc compta_journal) et loyers actuels
+const ZONES_K = [1, 2, 3, 4, 5, 6, 7];
+const TYPES_K = { commande: "Commande", contrat: "Contrat", loyer: "Loyer", manuel: "Manuel" };
+const septimsSigne = n => (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n));
+function nomZone(z, court) {
+  if (z == null) return "Sans zone";
+  const k = REG.coffres.find(c => c.zone_id === z), a = ZAFF.find(x => x.zone === z) || {};
+  const i = REG.intendants.find(x => String(x.id) === String(a.intendant_id ?? ""));
+  return court ? `Zone ${z}` : `Zone ${z}${k ? " · " + k.nom : ""}${i ? " · " + i.nom : ""}`;
+}
+// période choisie -> [début, fin[ en dates locales (null = sans limite)
+function periodeK() {
+  const v = $("kPer").value, d = new Date(), j0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  $("kDuWrap").hidden = $("kAuWrap").hidden = v !== "perso";
+  if (v === "semaine") { const l = new Date(j0); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); return [l, null, "cette semaine"]; }
+  if (v === "mois") return [new Date(d.getFullYear(), d.getMonth(), 1), null, "ce mois-ci"];
+  if (v === "moisPrec") { const a = new Date(d.getFullYear(), d.getMonth() - 1, 1); return [a, new Date(d.getFullYear(), d.getMonth(), 1), a.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })]; }
+  if (v === "perso") {
+    const du = $("kDu").value ? new Date($("kDu").value + "T00:00") : null;
+    const au = $("kAu").value ? new Date($("kAu").value + "T00:00") : null; if (au) au.setDate(au.getDate() + 1);
+    return [du, au, `du ${du ? du.toLocaleDateString("fr-FR") : "début"} au ${$("kAu").value ? new Date($("kAu").value + "T00:00").toLocaleDateString("fr-FR") : "aujourd'hui"}`];
+  }
+  return [null, null, "depuis le début"];
+}
+async function chargerCompta() {
+  if (!estAdmin()) return;
+  if ($("kZone").options.length === 1) ZONES_K.forEach(z => { $("kZone").add(new Option("Zone " + z, z)); $("mZone").add(new Option("Zone " + z, z)); });
+  const [j, l] = await Promise.all([sb.rpc("compta_journal"), sb.rpc("loyers_actuels")]);
+  if (j.error || l.error) {
+    const m = (j.error || l.error).message;
+    return flash($("kMsg"), "Compta non chargée : " + m + (/compta_journal|loyers_actuels|function/i.test(m) ? " (as-tu lancé 29_compta.sql ?)" : ""), false);
+  }
+  KJ = (j.data || []).map(r => ({ ...r, montant: Number(r.montant) || 0, t: new Date(r.le) })).sort((a, b) => b.t - a.t);
+  KLOY = l.data || [];
+  renderCompta();
+}
+function renderCompta() {
+  if (!KJ) return;
+  const [du, au, libPer] = periodeK(), zf = $("kZone").value ? Number($("kZone").value) : null;
+  const dansPer = r => (!du || r.t >= du) && (!au || r.t < au);
+  const per = KJ.filter(dansPer);
+  const zonesVues = [...ZONES_K, ...(KJ.some(r => r.zone_id == null) ? [null] : [])].filter(z => zf == null || z === zf);
+
+  // 1. Coffres : solde (tout), entrées / sorties (période), ressources (tout)
+  $("kCoffres").innerHTML = zonesVues.map(z => {
+    const tout = KJ.filter(r => r.zone_id === z), p = per.filter(r => r.zone_id === z);
+    const solde = tout.reduce((s, r) => s + r.montant, 0);
+    const ent = p.filter(r => r.montant > 0).reduce((s, r) => s + r.montant, 0), sor = p.filter(r => r.montant < 0).reduce((s, r) => s - r.montant, 0);
+    const res = new Map();
+    tout.forEach(r => (r.ressources || []).forEach(x => res.set(x.nom, (res.get(x.nom) || 0) + (Number(x.qte) || 0))));
+    const resTxt = [...res].filter(([, q]) => q !== 0).sort((a, b) => a[0].localeCompare(b[0], "fr"));
+    const loy = KLOY.find(x => x.zone_id === z);
+    return `<div class="k-coffre"><div class="k-z">${esc(nomZone(z))}</div>
+      <div class="k-solde${solde < 0 ? " neg" : ""}">${solde < 0 ? "−" : ""}${fmt(Math.abs(solde))}</div>
+      <div class="k-es"><span class="pos">▲ ${fmt(ent)}</span><span class="neg">▼ ${fmt(sor)}</span><span class="hint">${esc(libPer)}</span></div>
+      ${z != null ? `<div class="hint">Loyer : ${loy && loy.montant ? fmt(loy.montant) + " / semaine" : "aucun"}</div>` : `<div class="hint">Permanences dont la zone est introuvable (coffre / châtellerie sans zone)</div>`}
+      ${resTxt.length ? `<details class="k-res"><summary>Ressources (${resTxt.length})</summary>${resTxt.map(([n, q]) => `<div><span>${esc(n)}</span><b${q < 0 ? ' class="neg"' : ""}>${q.toLocaleString("fr-FR")}</b></div>`).join("")}</details>` : ""}
+    </div>`;
+  }).join("");
+
+  // 2. Statistiques de la période
+  $("kStatPer").textContent = "— " + libPer + (zf ? " · zone " + zf : "");
+  $("kStats").innerHTML = statsCompta(per, zf);
+
+  // 3. Journal
+  const ty = $("kType").value;
+  const lignes = per.filter(r => (zf == null || r.zone_id === zf) && (!ty || r.type === ty));
+  let solde = zf != null ? KJ.filter(r => r.zone_id === zf && (!au || r.t < au)).reduce((s, r) => s + r.montant, 0) : null;
+  const MAX = 300;
+  $("kNb").textContent = lignes.length;
+  $("kJournal").innerHTML = lignes.length ? `<div class="k-table"><table class="k-jr"><thead><tr><th>Date</th>${zf == null ? "<th>Zone</th>" : ""}<th>Mouvement</th><th class="r">Septims</th>${zf != null && !ty ? '<th class="r">Solde</th>' : ""}<th></th></tr></thead><tbody>${
+    lignes.slice(0, MAX).map(r => {
+      const s = solde; if (solde != null) solde -= r.montant;
+      const res = (r.ressources || []).filter(x => Number(x.qte)).map(x => `${Number(x.qte) > 0 ? "+" : "−"}${Math.abs(Number(x.qte)).toLocaleString("fr-FR")} ${esc(x.nom)}`).join(" · ");
+      return `<tr><td class="k-d">${r.t.toLocaleDateString("fr-FR")}<br><span class="hint">${r.t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span></td>
+        ${zf == null ? `<td>${esc(nomZone(r.zone_id, true))}</td>` : ""}
+        <td><span class="k-type k-${r.type}">${TYPES_K[r.type] || r.type}</span> ${esc(r.libelle)}${res ? `<br><span class="hint">Ressources : ${res}</span>` : ""}${r.detail?.par ? `<br><span class="hint">par ${esc(r.detail.par)}</span>` : ""}</td>
+        <td class="r ${r.montant > 0 ? "pos" : r.montant < 0 ? "neg" : ""}">${r.montant ? septimsSigne(r.montant) : "—"}</td>
+        ${zf != null && !ty ? `<td class="r">${s < 0 ? "−" : ""}${fmt(Math.abs(s))}</td>` : ""}
+        <td>${r.type === "manuel" ? `<button type="button" class="x" title="Supprimer ce mouvement" data-mvt="${esc(r.detail?.id)}">×</button>` : ""}</td></tr>`;
+    }).join("")}</tbody></table></div>${lignes.length > MAX ? `<p class="hint">Les ${MAX} plus récents sont affichés : réduis la période pour voir le reste.</p>` : ""}`
+    : '<p class="empty">Aucun mouvement sur cette période.</p>';
+  $("kJournal").querySelectorAll("[data-mvt]").forEach(b => b.onclick = async () => {
+    if (!await confirmer("Supprimer ce mouvement manuel ?")) return;
+    const { error } = await sb.from("mouvements").delete().eq("id", b.dataset.mvt);
+    if (error) flash($("kMsg"), "Non supprimé : " + error.message, false); else { flash($("kMsg"), "Mouvement supprimé.", true); chargerCompta(); }
+  });
+  const noms = new Set(); KJ.forEach(r => (r.ressources || []).forEach(x => noms.add(x.nom)));
+  $("kResList").innerHTML = [...noms].sort((a, b) => a.localeCompare(b, "fr")).map(n => `<option value="${esc(n)}">`).join("");
+
+  // 4. Loyers
+  $("kLoyers").innerHTML = `<table class="zones k-loy"><thead><tr><th>Zone</th><th>Loyer / semaine</th><th></th></tr></thead><tbody>${
+    ZONES_K.map(z => { const l = KLOY.find(x => x.zone_id === z);
+      return `<tr><td><b>${esc(nomZone(z))}</b></td><td><input type="number" min="0" step="1" data-loyer="${z}" value="${l ? l.montant : 0}"></td>
+        <td class="hint">${l ? `depuis le ${new Date(l.depuis + "T00:00").toLocaleDateString("fr-FR")}${l.fixe_par ? " · par " + esc(l.fixe_par) : ""}` : "jamais fixé"}</td></tr>`; }).join("")}</tbody></table>`;
+  $("kLoyers").querySelectorAll("[data-loyer]").forEach(inp => inp.onchange = async () => {
+    const z = Number(inp.dataset.loyer), m = Math.round(Number(inp.value));
+    if (!(m >= 0)) { inp.value = 0; return; }
+    const { error } = await sb.rpc("fixer_loyer", { zone: z, montant_: m });
+    if (error) flash($("lMsg"), "Non enregistré : " + error.message, false);
+    else { flash($("lMsg"), `Zone ${z} : loyer ${m ? fmt(m) + " par semaine" : "supprimé"}, à partir d'aujourd'hui.`, true); chargerCompta(); }
+  });
+}
+
+// Barres horizontales (valeur écrite à côté : la couleur n'est jamais seule à porter l'info)
+function barresK(lignes, max) {
+  return lignes.map(l => `<div class="k-bar" title="${esc(l.titre || "")}"><span class="k-bl">${esc(l.lib)}</span>
+    <span class="k-bt"><span class="k-bf ${l.cl || ""}" style="width:${max ? Math.max(l.v ? 1.5 : 0, l.v / max * 100) : 0}%"></span></span><span class="k-bv">${esc(l.txt)}</span></div>`).join("");
+}
+function statsCompta(per, zf) {
+  if (!per.length) return '<p class="empty">Aucun mouvement sur cette période.</p>';
+  const parZone = ZONES_K.map(z => {
+    const p = per.filter(r => r.zone_id === z), som = t => p.filter(r => r.type === t).reduce((s, r) => s + r.montant, 0);
+    const enc = som("commande"), ctr = -som("contrat"), loy = -som("loyer"), man = som("manuel");
+    return { z, enc, ctr, loy, man, sorti: ctr + loy + Math.max(0, -man), net: p.reduce((s, r) => s + r.montant, 0), nbCtr: p.filter(r => r.type === "contrat").length, nbCmd: p.filter(r => r.type === "commande").length };
+  });
+  const top = (k, signe = 1) => [...parZone].sort((a, b) => signe * (b[k] - a[k]))[0];
+  const tEnc = top("enc"), tSor = top("sorti"), tNet = top("net"), tCtr = top("nbCtr");
+  const tuile = (lib, z, val) => `<div class="k-tuile"><span class="hint">${lib}</span><b>${z && val ? "Zone " + z.z : "—"}</b><span>${z && val ? val : ""}</span></div>`;
+  let html = `<div class="k-tuiles">
+    ${tuile("A le plus encaissé", tEnc, tEnc.enc ? fmt(tEnc.enc) : "")}
+    ${tuile("A le plus dépensé", tSor, tSor.sorti ? fmt(tSor.sorti) : "")}
+    ${tuile("Meilleur résultat", tNet, tNet.net ? septimsSigne(tNet.net) : "")}
+    ${tuile("Le plus de contrats réalisés", tCtr, tCtr.nbCtr ? tCtr.nbCtr + " contrat(s)" : "")}
+  </div>`;
+  const maxES = Math.max(...parZone.map(x => Math.max(x.enc, x.sorti)), 0);
+  html += `<h3 class="k-titre">Encaissé et dépensé par zone</h3>
+    <p class="k-leg"><span class="k-pt pos"></span> encaissé (commandes payées) <span class="k-pt neg"></span> dépensé (contrats + loyers + retraits)</p>
+    ${parZone.map(x => `<div class="k-zbloc"><div class="k-zn">Zone ${x.z} <span class="hint">· résultat ${septimsSigne(x.net)}</span></div>
+      ${barresK([{ lib: "Encaissé", v: x.enc, txt: fmt(x.enc), cl: "pos", titre: `${x.nbCmd} commande(s) payée(s)` },
+                 { lib: "Dépensé", v: x.sorti, txt: fmt(x.sorti), cl: "neg", titre: `Contrats ${fmt(x.ctr)} · loyers ${fmt(x.loy)}` }], maxES)}</div>`).join("")}`;
+  html += `<div class="k-table"><table class="k-jr k-recap"><thead><tr><th>Zone</th><th class="r">Commandes</th><th class="r">Contrats</th><th class="r">Loyers</th><th class="r">Manuels</th><th class="r">Résultat</th></tr></thead><tbody>${
+    parZone.map(x => `<tr><td>Zone ${x.z}</td><td class="r">${fmt(x.enc)}</td><td class="r">${x.ctr ? "−" + fmt(x.ctr) : "—"}</td><td class="r">${x.loy ? "−" + fmt(x.loy) : "—"}</td><td class="r">${x.man ? septimsSigne(x.man) : "—"}</td><td class="r ${x.net > 0 ? "pos" : x.net < 0 ? "neg" : ""}">${septimsSigne(x.net)}</td></tr>`).join("")}</tbody></table></div>`;
+
+  // Articles et clients (filtre zone respecté)
+  const pz = per.filter(r => zf == null || r.zone_id === zf);
+  const art = new Map(), cli = new Map(), res = new Map();
+  pz.filter(r => r.type === "commande").forEach(r => {
+    (r.detail?.items || []).forEach(x => { const a = art.get(x.nom) || { q: 0, s: 0 }; a.q += Number(x.qte) || 0; a.s += (Number(x.qte) || 0) * (Number(x.prix) || 0); art.set(x.nom, a); });
+    const c = r.detail?.client || "?"; const k = cli.get(c) || { n: 0, s: 0 }; k.n++; k.s += r.montant; cli.set(c, k);
+  });
+  pz.filter(r => r.type === "contrat").forEach(r => (r.ressources || []).forEach(x => res.set(x.nom, (res.get(x.nom) || 0) + (Number(x.qte) || 0))));
+  const tArt = [...art].sort((a, b) => b[1].s - a[1].s || b[1].q - a[1].q).slice(0, 10);
+  const tCli = [...cli].sort((a, b) => b[1].s - a[1].s).slice(0, 10);
+  const tRes = [...res].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const liste = (titre, rows, vide) => `<div><h3 class="k-titre">${titre}</h3>${rows.length ? `<ol class="k-top">${rows.join("")}</ol>` : `<p class="empty">${vide}</p>`}</div>`;
+  html += `<div class="k-tops">
+    ${liste("Articles les plus vendus", tArt.map(([n, a]) => `<li><span>${esc(n)}</span><span class="hint">${a.q.toLocaleString("fr-FR")} · ${fmt(a.s)}</span></li>`), "Aucune commande payée.")}
+    ${liste("Meilleurs clients", tCli.map(([n, c]) => `<li><span>${esc(n)}</span><span class="hint">${c.n} cmd · ${fmt(c.s)}</span></li>`), "Aucune commande payée.")}
+    ${liste("Ressources perçues (contrats)", tRes.map(([n, q]) => `<li><span>${esc(n)}</span><span class="hint">${q.toLocaleString("fr-FR")}</span></li>`), "Aucun contrat réalisé.")}
+  </div>`;
+  return html;
+}
+["kPer", "kDu", "kAu", "kZone", "kType"].forEach(id => $(id).onchange = () => { if (id === "kZone" && $("kZone").value) $("mZone").value = $("kZone").value; renderCompta(); });
+$("kMaj").onclick = () => chargerCompta();
+$("mAdd").onclick = async () => {
+  const sens = Number($("mSens").value), m = Math.round(Number($("mMontant").value) || 0), q = Math.round(Number($("mQte").value) || 0);
+  const res = $("mRes").value.trim(), lib = $("mLib").value.trim();
+  if (m < 0 || q < 0) return flash($("mMsg"), "Mets des nombres positifs : le sens (entrée / sortie) donne le signe.", false);
+  if (!m && !(res && q)) return flash($("mMsg"), "Indique un montant, ou une ressource avec sa quantité.", false);
+  if (!lib) return flash($("mMsg"), "Indique un libellé (la raison du mouvement).", false);
+  $("mAdd").disabled = true;
+  const { error } = await sb.rpc("ajouter_mouvement", { zone: Number($("mZone").value), montant_: sens * m, libelle_: lib, ressource_: res || null, qte_: res && q ? sens * q : null });
+  $("mAdd").disabled = false;
+  if (error) return flash($("mMsg"), "Non enregistré : " + error.message, false);
+  ["mMontant", "mLib", "mRes", "mQte"].forEach(id => $(id).value = "");
+  flash($("mMsg"), "Mouvement ajouté ✔", true); chargerCompta();
+};
 
 /* ---------- Démarrage ---------- */
 if (SUPABASE_URL.includes("XXXXXXXX")) ecranConnexion("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.", false);
