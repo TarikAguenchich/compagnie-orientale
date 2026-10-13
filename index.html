@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261013d">
+<link rel="stylesheet" href="style.css?v=20261013e">
 </head>
 <body>
 <!-- Connexion -->
@@ -179,7 +179,7 @@
     <div class="card">
       <h2>Coffres des zones <button type="button" class="btn small" id="kMaj" style="margin-left:auto">Actualiser</button></h2>
       <p class="hint" style="margin-top:0">Le <b>solde</b> est ce qu'il y a dans le coffre aujourd'hui (tout l'historique). Entrées et sorties : sur la période choisie.<br>
-      Entrées = commandes <b>payées</b>. Sorties = contrats d'export réalisés (le coffre paie le prix et reçoit les ressources) + loyer du pied-à-terre chaque lundi.</p>
+      Entrées = commandes <b>payées</b> (septims + pièces fournies par le client). Sorties = contrats d'export réalisés (le coffre paie le prix et reçoit les ressources), frappe de septims (le coffre paie et reçoit les lingots) et loyer du pied-à-terre chaque lundi.</p>
       <div id="kCoffres" class="k-coffres"></div>
     </div>
 
@@ -192,21 +192,37 @@
       <h2>Entrées / sorties <span class="badge" id="kNb">0</span></h2>
       <div class="row" style="margin-bottom:10px">
         <div style="min-width:200px"><label for="kType">Type</label><select id="kType"><option value="">Tous</option>
-          <option value="commande">Commandes payées</option><option value="contrat">Contrats d'export</option><option value="loyer">Loyers</option><option value="manuel">Manuels</option></select></div>
+          <option value="commande">Commandes payées</option><option value="contrat">Contrats d'export</option><option value="loyer">Loyers</option><option value="frappe">Frappe de septims</option><option value="manuel">Manuels</option></select></div>
       </div>
       <div id="kJournal"></div>
       <h3 class="k-titre">Ajouter un mouvement manuel</h3>
-      <p class="hint" style="margin-top:0">Correction, retrait, revente de ressources… Indique un montant et/ou une ressource avec sa quantité.</p>
+      <p class="hint" style="margin-top:0">Correction, retrait, revente d'objets… Indique un montant et/ou des objets avec leur quantité (le sens s'applique à tout).</p>
       <div class="k-form">
         <div><label for="mZone">Zone</label><select id="mZone"></select></div>
         <div><label for="mSens">Sens</label><select id="mSens"><option value="1">Entrée</option><option value="-1">Sortie</option></select></div>
         <div><label for="mMontant">Septims</label><input type="number" id="mMontant" min="0" step="1" placeholder="0"></div>
         <div class="k-lib"><label for="mLib">Libellé</label><input id="mLib" placeholder="ex. Achat de mobilier" autocomplete="off"></div>
-        <div><label for="mRes">Ressource <span class="hint">(facultatif)</span></label><input id="mRes" placeholder="ex. Bière" autocomplete="off" list="kResList"><datalist id="kResList"></datalist></div>
-        <div><label for="mQte">Quantité</label><input type="number" id="mQte" min="0" step="1" placeholder="0"></div>
       </div>
+      <label style="margin-top:10px">Objets <span class="hint">(facultatif)</span></label>
+      <div id="mObjets"></div><datalist id="kResList"></datalist>
+      <button type="button" class="btn small" id="mObjAdd">+ Objet</button>
       <div class="row" style="margin-top:10px"><button type="button" class="btn primary" id="mAdd">Ajouter</button></div>
       <div class="msg" id="mMsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>Frappe de septims</h2>
+      <p class="hint" style="margin-top:0">Le coffre de la zone <b>paie des septims</b> et <b>reçoit des lingots</b> d'or et d'argent. Repère : <b>400 lingots d'or + 200 d'argent = 20 000 septims</b> au maximum (avertissement seulement, rien n'est bloqué).</p>
+      <div class="k-form">
+        <div><label for="fZone">Zone</label><select id="fZone"></select></div>
+        <div><label for="fOr">Lingots d'or reçus</label><input type="number" id="fOr" min="0" step="1" placeholder="0"></div>
+        <div><label for="fArg">Lingots d'argent reçus</label><input type="number" id="fArg" min="0" step="1" placeholder="0"></div>
+        <div><label for="fSep">Septims payés</label><input type="number" id="fSep" min="0" step="1" placeholder="0"></div>
+        <div class="k-lib2"><label for="fLib">Libellé <span class="hint">(facultatif)</span></label><input id="fLib" placeholder="ex. Lingots achetés à Brynjolf" autocomplete="off"></div>
+      </div>
+      <p class="hint" id="fEtat"></p>
+      <div class="row"><button type="button" class="btn primary" id="fAdd">Enregistrer la frappe</button></div>
+      <div class="msg" id="fMsg"></div>
     </div>
 
     <div class="card">
@@ -317,6 +333,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261013d"></script>
+<script src="script.js?v=20261013e"></script>
 </body>
 </html>

@@ -1416,22 +1416,26 @@ function demarrer() {
   if (estAdmin()) { chargerComptes(); chargerCompagnies(); }
 }
 
-/* ---------- Compta des coffres (admin) : entrées / sorties, soldes, stats, loyers ---------- */
+/* ---------- Compta des coffres (admin) : entrées / sorties, soldes, inventaire, frappe, stats, loyers ---------- */
 var KJ = null, KLOY = [];            // journal complet (rpc compta_journal) et loyers actuels
 const ZONES_K = [1, 2, 3, 4, 5, 6, 7];
-const TYPES_K = { commande: "Commande", contrat: "Contrat", loyer: "Loyer", manuel: "Manuel" };
+const TYPES_K = { commande: "Commande", contrat: "Contrat", loyer: "Loyer", frappe: "Frappe", manuel: "Manuel" };
+const FRAPPE_MAX = { or: 400, arg: 200, sep: 20000 };          // repère par zone et par semaine (avertissement)
 const septimsSigne = n => (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n));
+const septimsNeg = n => (n < 0 ? "−" : "") + fmt(Math.abs(n));
+const cleObjet = n => sansAccent(n).replace(/s\b/g, "").replace(/\s+/g, " ").trim();   // « Lingots d'or » = « lingot d'or »
 function nomZone(z, court) {
   if (z == null) return "Sans zone";
   const k = REG.coffres.find(c => c.zone_id === z), a = ZAFF.find(x => x.zone === z) || {};
   const i = REG.intendants.find(x => String(x.id) === String(a.intendant_id ?? ""));
   return court ? `Zone ${z}` : `Zone ${z}${k ? " · " + k.nom : ""}${i ? " · " + i.nom : ""}`;
 }
+const lundiDe = d => { const l = new Date(d.getFullYear(), d.getMonth(), d.getDate()); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); return l; };
 // période choisie -> [début, fin[ en dates locales (null = sans limite)
 function periodeK() {
-  const v = $("kPer").value, d = new Date(), j0 = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const v = $("kPer").value, d = new Date();
   $("kDuWrap").hidden = $("kAuWrap").hidden = v !== "perso";
-  if (v === "semaine") { const l = new Date(j0); l.setDate(l.getDate() - ((l.getDay() + 6) % 7)); return [l, null, "cette semaine"]; }
+  if (v === "semaine") return [lundiDe(d), null, "cette semaine"];
   if (v === "mois") return [new Date(d.getFullYear(), d.getMonth(), 1), null, "ce mois-ci"];
   if (v === "moisPrec") { const a = new Date(d.getFullYear(), d.getMonth() - 1, 1); return [a, new Date(d.getFullYear(), d.getMonth(), 1), a.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })]; }
   if (v === "perso") {
@@ -1441,13 +1445,32 @@ function periodeK() {
   }
   return [null, null, "depuis le début"];
 }
+// inventaire : somme des objets (nom affiché = la 1re écriture rencontrée)
+function inventaire(lignes) {
+  const m = new Map();
+  lignes.forEach(r => (r.ressources || []).forEach(x => {
+    const k = cleObjet(x.nom), e = m.get(k) || { nom: x.nom, q: 0 }; e.q += Number(x.qte) || 0; m.set(k, e);
+  }));
+  return [...m.values()].filter(e => e.q !== 0).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+}
+// frappe d'une zone sur la semaine en cours
+function frappeSemaine(z) {
+  const l = lundiDe(new Date()), f = { or: 0, arg: 0, sep: 0 };
+  (KJ || []).filter(r => r.type === "frappe" && r.zone_id === z && r.t >= l).forEach(r => {
+    f.sep -= r.montant;
+    (r.ressources || []).forEach(x => { const k = cleObjet(x.nom); if (/\bor$/.test(k)) f.or += Number(x.qte) || 0; else if (/argent$/.test(k)) f.arg += Number(x.qte) || 0; });
+  });
+  f.trop = f.or > FRAPPE_MAX.or || f.arg > FRAPPE_MAX.arg || f.sep > FRAPPE_MAX.sep;
+  return f;
+}
 async function chargerCompta() {
   if (!estAdmin()) return;
-  if ($("kZone").options.length === 1) ZONES_K.forEach(z => { $("kZone").add(new Option("Zone " + z, z)); $("mZone").add(new Option("Zone " + z, z)); });
+  if ($("kZone").options.length === 1) ZONES_K.forEach(z => ["kZone", "mZone", "fZone"].forEach(id => $(id).add(new Option("Zone " + z, z))));
+  if (!$("mObjets").children.length) ajouterObjet();
   const [j, l] = await Promise.all([sb.rpc("compta_journal"), sb.rpc("loyers_actuels")]);
   if (j.error || l.error) {
     const m = (j.error || l.error).message;
-    return flash($("kMsg"), "Compta non chargée : " + m + (/compta_journal|loyers_actuels|function/i.test(m) ? " (as-tu lancé 29_compta.sql ?)" : ""), false);
+    return flash($("kMsg"), "Compta non chargée : " + m + (/compta_journal|loyers_actuels|function/i.test(m) ? " (as-tu lancé 29_compta.sql et 30_compta_frappe.sql ?)" : ""), false);
   }
   KJ = (j.data || []).map(r => ({ ...r, montant: Number(r.montant) || 0, t: new Date(r.le) })).sort((a, b) => b.t - a.t);
   KLOY = l.data || [];
@@ -1456,56 +1479,57 @@ async function chargerCompta() {
 function renderCompta() {
   if (!KJ) return;
   const [du, au, libPer] = periodeK(), zf = $("kZone").value ? Number($("kZone").value) : null;
-  const dansPer = r => (!du || r.t >= du) && (!au || r.t < au);
-  const per = KJ.filter(dansPer);
+  const per = KJ.filter(r => (!du || r.t >= du) && (!au || r.t < au));
   const zonesVues = [...ZONES_K, ...(KJ.some(r => r.zone_id == null) ? [null] : [])].filter(z => zf == null || z === zf);
 
-  // 1. Coffres : solde (tout), entrées / sorties (période), ressources (tout)
+  // 1. Coffres : solde et inventaire (tout l'historique), entrées / sorties (période), frappe de la semaine
   $("kCoffres").innerHTML = zonesVues.map(z => {
     const tout = KJ.filter(r => r.zone_id === z), p = per.filter(r => r.zone_id === z);
     const solde = tout.reduce((s, r) => s + r.montant, 0);
     const ent = p.filter(r => r.montant > 0).reduce((s, r) => s + r.montant, 0), sor = p.filter(r => r.montant < 0).reduce((s, r) => s - r.montant, 0);
-    const res = new Map();
-    tout.forEach(r => (r.ressources || []).forEach(x => res.set(x.nom, (res.get(x.nom) || 0) + (Number(x.qte) || 0))));
-    const resTxt = [...res].filter(([, q]) => q !== 0).sort((a, b) => a[0].localeCompare(b[0], "fr"));
-    const loy = KLOY.find(x => x.zone_id === z);
+    const inv = inventaire(tout), loy = KLOY.find(x => x.zone_id === z), f = z != null ? frappeSemaine(z) : null;
     return `<div class="k-coffre"><div class="k-z">${esc(nomZone(z))}</div>
-      <div class="k-solde${solde < 0 ? " neg" : ""}">${solde < 0 ? "−" : ""}${fmt(Math.abs(solde))}</div>
+      <div class="k-solde${solde < 0 ? " neg" : ""}">${septimsNeg(solde)}</div>
       <div class="k-es"><span class="pos">▲ ${fmt(ent)}</span><span class="neg">▼ ${fmt(sor)}</span><span class="hint">${esc(libPer)}</span></div>
-      ${z != null ? `<div class="hint">Loyer : ${loy && loy.montant ? fmt(loy.montant) + " / semaine" : "aucun"}</div>` : `<div class="hint">Permanences dont la zone est introuvable (coffre / châtellerie sans zone)</div>`}
-      ${resTxt.length ? `<details class="k-res"><summary>Ressources (${resTxt.length})</summary>${resTxt.map(([n, q]) => `<div><span>${esc(n)}</span><b${q < 0 ? ' class="neg"' : ""}>${q.toLocaleString("fr-FR")}</b></div>`).join("")}</details>` : ""}
+      ${z != null ? `<div class="hint">Loyer : ${loy && loy.montant ? fmt(loy.montant) + " / semaine" : "aucun"}</div>
+        <div class="hint${f.trop ? " k-alerte" : ""}">Frappe cette semaine : ${f.or} or · ${f.arg} argent · ${fmt(f.sep)}${f.trop ? " ⚠ au-dessus du maximum" : ""}</div>`
+        : `<div class="hint">Permanences dont la zone est introuvable (coffre / châtellerie sans zone)</div>`}
+      <div class="k-inv"><div class="k-invt">Objets dans le coffre</div>${inv.length
+        ? inv.map(e => `<div><span>${esc(e.nom)}</span><b${e.q < 0 ? ' class="neg"' : ""}>${e.q < 0 ? "−" : ""}${Math.abs(e.q).toLocaleString("fr-FR")}</b></div>`).join("")
+        : '<span class="hint">Aucun</span>'}</div>
     </div>`;
   }).join("");
 
-  // 2. Statistiques de la période
+  // 2. Statistiques de la période (limitées à la zone choisie)
   $("kStatPer").textContent = "— " + libPer + (zf ? " · zone " + zf : "");
-  $("kStats").innerHTML = statsCompta(per, zf);
+  $("kStats").innerHTML = statsCompta(per.filter(r => zf == null || r.zone_id === zf), zf);
 
   // 3. Journal
   const ty = $("kType").value;
   const lignes = per.filter(r => (zf == null || r.zone_id === zf) && (!ty || r.type === ty));
   let solde = zf != null ? KJ.filter(r => r.zone_id === zf && (!au || r.t < au)).reduce((s, r) => s + r.montant, 0) : null;
-  const MAX = 300;
+  const MAX = 300, avecSolde = zf != null && !ty;
   $("kNb").textContent = lignes.length;
-  $("kJournal").innerHTML = lignes.length ? `<div class="k-table"><table class="k-jr"><thead><tr><th>Date</th>${zf == null ? "<th>Zone</th>" : ""}<th>Mouvement</th><th class="r">Septims</th>${zf != null && !ty ? '<th class="r">Solde</th>' : ""}<th></th></tr></thead><tbody>${
+  $("kJournal").innerHTML = lignes.length ? `<div class="k-table"><table class="k-jr"><thead><tr><th>Date</th>${zf == null ? "<th>Zone</th>" : ""}<th>Mouvement</th><th class="r">Septims</th>${avecSolde ? '<th class="r">Solde</th>' : ""}<th></th></tr></thead><tbody>${
     lignes.slice(0, MAX).map(r => {
       const s = solde; if (solde != null) solde -= r.montant;
       const res = (r.ressources || []).filter(x => Number(x.qte)).map(x => `${Number(x.qte) > 0 ? "+" : "−"}${Math.abs(Number(x.qte)).toLocaleString("fr-FR")} ${esc(x.nom)}`).join(" · ");
       return `<tr><td class="k-d">${r.t.toLocaleDateString("fr-FR")}<br><span class="hint">${r.t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span></td>
         ${zf == null ? `<td>${esc(nomZone(r.zone_id, true))}</td>` : ""}
-        <td><span class="k-type k-${r.type}">${TYPES_K[r.type] || r.type}</span> ${esc(r.libelle)}${res ? `<br><span class="hint">Ressources : ${res}</span>` : ""}${r.detail?.par ? `<br><span class="hint">par ${esc(r.detail.par)}</span>` : ""}</td>
+        <td><span class="k-type">${TYPES_K[r.type] || r.type}</span> ${esc(r.libelle)}${res ? `<br><span class="hint">Objets : ${res}</span>` : ""}${r.detail?.par ? `<br><span class="hint">par ${esc(r.detail.par)}</span>` : ""}</td>
         <td class="r ${r.montant > 0 ? "pos" : r.montant < 0 ? "neg" : ""}">${r.montant ? septimsSigne(r.montant) : "—"}</td>
-        ${zf != null && !ty ? `<td class="r">${s < 0 ? "−" : ""}${fmt(Math.abs(s))}</td>` : ""}
-        <td>${r.type === "manuel" ? `<button type="button" class="x" title="Supprimer ce mouvement" data-mvt="${esc(r.detail?.id)}">×</button>` : ""}</td></tr>`;
+        ${avecSolde ? `<td class="r">${septimsNeg(s)}</td>` : ""}
+        <td>${r.type === "manuel" || r.type === "frappe" ? `<button type="button" class="x" title="Supprimer ce mouvement" data-mvt="${esc(r.detail?.id)}">×</button>` : ""}</td></tr>`;
     }).join("")}</tbody></table></div>${lignes.length > MAX ? `<p class="hint">Les ${MAX} plus récents sont affichés : réduis la période pour voir le reste.</p>` : ""}`
     : '<p class="empty">Aucun mouvement sur cette période.</p>';
   $("kJournal").querySelectorAll("[data-mvt]").forEach(b => b.onclick = async () => {
-    if (!await confirmer("Supprimer ce mouvement manuel ?")) return;
+    if (!await confirmer("Supprimer ce mouvement ?")) return;
     const { error } = await sb.from("mouvements").delete().eq("id", b.dataset.mvt);
     if (error) flash($("kMsg"), "Non supprimé : " + error.message, false); else { flash($("kMsg"), "Mouvement supprimé.", true); chargerCompta(); }
   });
-  const noms = new Set(); KJ.forEach(r => (r.ressources || []).forEach(x => noms.add(x.nom)));
-  $("kResList").innerHTML = [...noms].sort((a, b) => a.localeCompare(b, "fr")).map(n => `<option value="${esc(n)}">`).join("");
+  $("kResList").innerHTML = inventaire(KJ.map(r => ({ ressources: (r.ressources || []).map(x => ({ nom: x.nom, qte: 1 })) })))
+    .map(e => `<option value="${esc(e.nom)}">`).join("");
+  majEtatFrappe();
 
   // 4. Loyers
   $("kLoyers").innerHTML = `<table class="zones k-loy"><thead><tr><th>Zone</th><th>Loyer / semaine</th><th></th></tr></thead><tbody>${
@@ -1528,62 +1552,114 @@ function barresK(lignes, max) {
 }
 function statsCompta(per, zf) {
   if (!per.length) return '<p class="empty">Aucun mouvement sur cette période.</p>';
-  const parZone = ZONES_K.map(z => {
+  const parZone = (zf ? [zf] : ZONES_K).map(z => {
     const p = per.filter(r => r.zone_id === z), som = t => p.filter(r => r.type === t).reduce((s, r) => s + r.montant, 0);
-    const enc = som("commande"), ctr = -som("contrat"), loy = -som("loyer"), man = som("manuel");
-    return { z, enc, ctr, loy, man, sorti: ctr + loy + Math.max(0, -man), net: p.reduce((s, r) => s + r.montant, 0), nbCtr: p.filter(r => r.type === "contrat").length, nbCmd: p.filter(r => r.type === "commande").length };
+    const enc = som("commande"), ctr = -som("contrat"), loy = -som("loyer"), fra = -som("frappe"), man = som("manuel");
+    return { z, enc, ctr, loy, fra, man, sorti: ctr + loy + fra + Math.max(0, -man), net: p.reduce((s, r) => s + r.montant, 0),
+             nbCtr: p.filter(r => r.type === "contrat").length, nbCmd: p.filter(r => r.type === "commande").length };
   });
-  const top = (k, signe = 1) => [...parZone].sort((a, b) => signe * (b[k] - a[k]))[0];
-  const tEnc = top("enc"), tSor = top("sorti"), tNet = top("net"), tCtr = top("nbCtr");
-  const tuile = (lib, z, val) => `<div class="k-tuile"><span class="hint">${lib}</span><b>${z && val ? "Zone " + z.z : "—"}</b><span>${z && val ? val : ""}</span></div>`;
-  let html = `<div class="k-tuiles">
-    ${tuile("A le plus encaissé", tEnc, tEnc.enc ? fmt(tEnc.enc) : "")}
-    ${tuile("A le plus dépensé", tSor, tSor.sorti ? fmt(tSor.sorti) : "")}
-    ${tuile("Meilleur résultat", tNet, tNet.net ? septimsSigne(tNet.net) : "")}
-    ${tuile("Le plus de contrats réalisés", tCtr, tCtr.nbCtr ? tCtr.nbCtr + " contrat(s)" : "")}
-  </div>`;
+  const tuile = (lib, titre, val) => `<div class="k-tuile"><span class="hint">${lib}</span><b>${titre || "—"}</b><span>${titre ? val : ""}</span></div>`;
+  let html;
+  if (zf) {          // une zone : ses chiffres
+    const x = parZone[0];
+    html = `<div class="k-tuiles">
+      ${tuile("Encaissé", fmt(x.enc), x.nbCmd + " commande(s) payée(s)")}
+      ${tuile("Dépensé", fmt(x.sorti), `contrats ${fmt(x.ctr)} · frappe ${fmt(x.fra)} · loyers ${fmt(x.loy)}`)}
+      ${tuile("Résultat", septimsSigne(x.net), "sur la période")}
+      ${tuile("Contrats réalisés", String(x.nbCtr), fmt(x.ctr) + " payés")}
+    </div>`;
+  } else {           // toutes les zones : classements
+    const top = k => [...parZone].sort((a, b) => b[k] - a[k])[0];
+    const t = { enc: top("enc"), sorti: top("sorti"), net: top("net"), fra: top("fra"), nbCtr: top("nbCtr") };
+    html = `<div class="k-tuiles">
+      ${tuile("A le plus encaissé", t.enc.enc ? "Zone " + t.enc.z : "", fmt(t.enc.enc))}
+      ${tuile("A le plus dépensé", t.sorti.sorti ? "Zone " + t.sorti.z : "", fmt(t.sorti.sorti))}
+      ${tuile("Meilleur résultat", t.net.net ? "Zone " + t.net.z : "", septimsSigne(t.net.net))}
+      ${tuile("A le plus frappé", t.fra.fra ? "Zone " + t.fra.z : "", fmt(t.fra.fra))}
+      ${tuile("Le plus de contrats", t.nbCtr.nbCtr ? "Zone " + t.nbCtr.z : "", t.nbCtr.nbCtr + " contrat(s)")}
+    </div>`;
+  }
   const maxES = Math.max(...parZone.map(x => Math.max(x.enc, x.sorti)), 0);
-  html += `<h3 class="k-titre">Encaissé et dépensé par zone</h3>
-    <p class="k-leg"><span class="k-pt pos"></span> encaissé (commandes payées) <span class="k-pt neg"></span> dépensé (contrats + loyers + retraits)</p>
+  html += `<h3 class="k-titre">Encaissé et dépensé${zf ? "" : " par zone"}</h3>
+    <p class="k-leg"><span class="k-pt pos"></span> encaissé (commandes payées) <span class="k-pt neg"></span> dépensé (contrats + frappe + loyers + retraits)</p>
     ${parZone.map(x => `<div class="k-zbloc"><div class="k-zn">Zone ${x.z} <span class="hint">· résultat ${septimsSigne(x.net)}</span></div>
       ${barresK([{ lib: "Encaissé", v: x.enc, txt: fmt(x.enc), cl: "pos", titre: `${x.nbCmd} commande(s) payée(s)` },
-                 { lib: "Dépensé", v: x.sorti, txt: fmt(x.sorti), cl: "neg", titre: `Contrats ${fmt(x.ctr)} · loyers ${fmt(x.loy)}` }], maxES)}</div>`).join("")}`;
-  html += `<div class="k-table"><table class="k-jr k-recap"><thead><tr><th>Zone</th><th class="r">Commandes</th><th class="r">Contrats</th><th class="r">Loyers</th><th class="r">Manuels</th><th class="r">Résultat</th></tr></thead><tbody>${
-    parZone.map(x => `<tr><td>Zone ${x.z}</td><td class="r">${fmt(x.enc)}</td><td class="r">${x.ctr ? "−" + fmt(x.ctr) : "—"}</td><td class="r">${x.loy ? "−" + fmt(x.loy) : "—"}</td><td class="r">${x.man ? septimsSigne(x.man) : "—"}</td><td class="r ${x.net > 0 ? "pos" : x.net < 0 ? "neg" : ""}">${septimsSigne(x.net)}</td></tr>`).join("")}</tbody></table></div>`;
+                 { lib: "Dépensé", v: x.sorti, txt: fmt(x.sorti), cl: "neg", titre: `Contrats ${fmt(x.ctr)} · frappe ${fmt(x.fra)} · loyers ${fmt(x.loy)}` }], maxES)}</div>`).join("")}`;
+  const neg = v => v ? "−" + fmt(v) : "—";
+  html += `<div class="k-table"><table class="k-jr k-recap"><thead><tr><th>Zone</th><th class="r">Commandes</th><th class="r">Contrats</th><th class="r">Frappe</th><th class="r">Loyers</th><th class="r">Manuels</th><th class="r">Résultat</th></tr></thead><tbody>${
+    parZone.map(x => `<tr><td>Zone ${x.z}</td><td class="r">${fmt(x.enc)}</td><td class="r">${neg(x.ctr)}</td><td class="r">${neg(x.fra)}</td><td class="r">${neg(x.loy)}</td><td class="r">${x.man ? septimsSigne(x.man) : "—"}</td><td class="r ${x.net > 0 ? "pos" : x.net < 0 ? "neg" : ""}">${septimsSigne(x.net)}</td></tr>`).join("")}</tbody></table></div>`;
 
-  // Articles et clients (filtre zone respecté)
-  const pz = per.filter(r => zf == null || r.zone_id === zf);
-  const art = new Map(), cli = new Map(), res = new Map();
-  pz.filter(r => r.type === "commande").forEach(r => {
+  // Articles, clients, objets reçus
+  const art = new Map(), cli = new Map();
+  per.filter(r => r.type === "commande").forEach(r => {
     (r.detail?.items || []).forEach(x => { const a = art.get(x.nom) || { q: 0, s: 0 }; a.q += Number(x.qte) || 0; a.s += (Number(x.qte) || 0) * (Number(x.prix) || 0); art.set(x.nom, a); });
-    const c = r.detail?.client || "?"; const k = cli.get(c) || { n: 0, s: 0 }; k.n++; k.s += r.montant; cli.set(c, k);
+    const c = r.detail?.client || "?", k = cli.get(c) || { n: 0, s: 0 }; k.n++; k.s += r.montant; cli.set(c, k);
   });
-  pz.filter(r => r.type === "contrat").forEach(r => (r.ressources || []).forEach(x => res.set(x.nom, (res.get(x.nom) || 0) + (Number(x.qte) || 0))));
+  const recus = inventaire(per.map(r => ({ ressources: (r.ressources || []).filter(x => Number(x.qte) > 0) })));
   const tArt = [...art].sort((a, b) => b[1].s - a[1].s || b[1].q - a[1].q).slice(0, 10);
   const tCli = [...cli].sort((a, b) => b[1].s - a[1].s).slice(0, 10);
-  const tRes = [...res].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const tRec = recus.sort((a, b) => b.q - a.q).slice(0, 10);
   const liste = (titre, rows, vide) => `<div><h3 class="k-titre">${titre}</h3>${rows.length ? `<ol class="k-top">${rows.join("")}</ol>` : `<p class="empty">${vide}</p>`}</div>`;
   html += `<div class="k-tops">
     ${liste("Articles les plus vendus", tArt.map(([n, a]) => `<li><span>${esc(n)}</span><span class="hint">${a.q.toLocaleString("fr-FR")} · ${fmt(a.s)}</span></li>`), "Aucune commande payée.")}
     ${liste("Meilleurs clients", tCli.map(([n, c]) => `<li><span>${esc(n)}</span><span class="hint">${c.n} cmd · ${fmt(c.s)}</span></li>`), "Aucune commande payée.")}
-    ${liste("Ressources perçues (contrats)", tRes.map(([n, q]) => `<li><span>${esc(n)}</span><span class="hint">${q.toLocaleString("fr-FR")}</span></li>`), "Aucun contrat réalisé.")}
+    ${liste("Objets reçus", tRec.map(e => `<li><span>${esc(e.nom)}</span><span class="hint">${e.q.toLocaleString("fr-FR")}</span></li>`), "Aucun objet reçu.")}
   </div>`;
   return html;
 }
-["kPer", "kDu", "kAu", "kZone", "kType"].forEach(id => $(id).onchange = () => { if (id === "kZone" && $("kZone").value) $("mZone").value = $("kZone").value; renderCompta(); });
+
+// Formulaire « mouvement manuel » : lignes d'objets
+function ajouterObjet() {
+  const d = document.createElement("div"); d.className = "k-obj";
+  d.innerHTML = `<input class="o-nom" placeholder="Objet (ex. Armure d'acier)" list="kResList" autocomplete="off"><input class="o-qte" type="number" min="0" step="1" placeholder="Qté"><button type="button" class="x" title="Retirer">×</button>`;
+  d.querySelector(".x").onclick = () => { d.remove(); if (!$("mObjets").children.length) ajouterObjet(); };
+  $("mObjets").append(d);
+}
+$("mObjAdd").onclick = () => ajouterObjet();
+["kPer", "kDu", "kAu", "kZone", "kType"].forEach(id => $(id).onchange = () => {
+  if (id === "kZone" && $("kZone").value) $("mZone").value = $("fZone").value = $("kZone").value;
+  renderCompta();
+});
 $("kMaj").onclick = () => chargerCompta();
+async function mouvement(champs, btn, msg) {
+  btn.disabled = true;
+  const { error } = await sb.rpc("enregistrer_mouvement", champs);
+  btn.disabled = false;
+  if (error) { flash(msg, "Non enregistré : " + error.message + (/enregistrer_mouvement/.test(error.message) ? " (as-tu lancé 30_compta_frappe.sql ?)" : ""), false); return false; }
+  return true;
+}
 $("mAdd").onclick = async () => {
-  const sens = Number($("mSens").value), m = Math.round(Number($("mMontant").value) || 0), q = Math.round(Number($("mQte").value) || 0);
-  const res = $("mRes").value.trim(), lib = $("mLib").value.trim();
-  if (m < 0 || q < 0) return flash($("mMsg"), "Mets des nombres positifs : le sens (entrée / sortie) donne le signe.", false);
-  if (!m && !(res && q)) return flash($("mMsg"), "Indique un montant, ou une ressource avec sa quantité.", false);
+  const sens = Number($("mSens").value), m = Math.round(Number($("mMontant").value) || 0), lib = $("mLib").value.trim();
+  const objets = [...document.querySelectorAll("#mObjets .k-obj")].map(d => ({ nom: d.querySelector(".o-nom").value.trim(), qte: Math.round(Number(d.querySelector(".o-qte").value) || 0) }));
+  if (m < 0 || objets.some(o => o.qte < 0)) return flash($("mMsg"), "Mets des nombres positifs : le sens (entrée / sortie) donne le signe.", false);
+  if (objets.some(o => o.nom && !o.qte)) return flash($("mMsg"), "Indique la quantité de chaque objet.", false);
+  const ok = objets.filter(o => o.nom && o.qte).map(o => ({ nom: o.nom, qte: sens * o.qte }));
+  if (!m && !ok.length) return flash($("mMsg"), "Indique un montant, ou au moins un objet avec sa quantité.", false);
   if (!lib) return flash($("mMsg"), "Indique un libellé (la raison du mouvement).", false);
-  $("mAdd").disabled = true;
-  const { error } = await sb.rpc("ajouter_mouvement", { zone: Number($("mZone").value), montant_: sens * m, libelle_: lib, ressource_: res || null, qte_: res && q ? sens * q : null });
-  $("mAdd").disabled = false;
-  if (error) return flash($("mMsg"), "Non enregistré : " + error.message, false);
-  ["mMontant", "mLib", "mRes", "mQte"].forEach(id => $(id).value = "");
+  if (!await mouvement({ zone: Number($("mZone").value), type_: "manuel", montant_: sens * m, libelle_: lib, ressources_: ok }, $("mAdd"), $("mMsg"))) return;
+  ["mMontant", "mLib"].forEach(id => $(id).value = ""); $("mObjets").innerHTML = ""; ajouterObjet();
   flash($("mMsg"), "Mouvement ajouté ✔", true); chargerCompta();
+};
+// Frappe de septims
+function majEtatFrappe() {
+  if (!KJ) return;
+  const z = Number($("fZone").value) || 1, f = frappeSemaine(z);
+  const or = f.or + (Math.round(Number($("fOr").value)) || 0), arg = f.arg + (Math.round(Number($("fArg").value)) || 0), sep = f.sep + (Math.round(Number($("fSep").value)) || 0);
+  const trop = [or > FRAPPE_MAX.or && `or ${or}/${FRAPPE_MAX.or}`, arg > FRAPPE_MAX.arg && `argent ${arg}/${FRAPPE_MAX.arg}`, sep > FRAPPE_MAX.sep && `${fmt(sep)}/${fmt(FRAPPE_MAX.sep)}`].filter(Boolean);
+  $("fEtat").className = "hint" + (trop.length ? " k-alerte" : "");
+  $("fEtat").textContent = `Zone ${z}, cette semaine : ${f.or} or · ${f.arg} argent · ${fmt(f.sep)} déjà frappés.` + (trop.length ? ` ⚠ Avec cette frappe : au-dessus du maximum (${trop.join(", ")}).` : "");
+}
+["fZone", "fOr", "fArg", "fSep"].forEach(id => $(id).oninput = $(id).onchange = majEtatFrappe);
+$("fAdd").onclick = async () => {
+  const or = Math.round(Number($("fOr").value) || 0), arg = Math.round(Number($("fArg").value) || 0), sep = Math.round(Number($("fSep").value) || 0);
+  if (or < 0 || arg < 0 || sep < 0) return flash($("fMsg"), "Mets des nombres positifs.", false);
+  if (!or && !arg) return flash($("fMsg"), "Indique les lingots d'or et/ou d'argent reçus.", false);
+  if (!sep) return flash($("fMsg"), "Indique les septims payés.", false);
+  const z = Number($("fZone").value);
+  const ressources_ = [or && { nom: "Lingots d'or", qte: or }, arg && { nom: "Lingots d'argent", qte: arg }].filter(Boolean);
+  if (!await mouvement({ zone: z, type_: "frappe", montant_: -sep, libelle_: $("fLib").value.trim() || "Frappe de septims", ressources_ }, $("fAdd"), $("fMsg"))) return;
+  ["fOr", "fArg", "fSep", "fLib"].forEach(id => $(id).value = "");
+  flash($("fMsg"), `Zone ${z} : frappe enregistrée ✔`, true); chargerCompta();
 };
 
 /* ---------- Démarrage ---------- */
