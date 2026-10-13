@@ -969,7 +969,8 @@ const imgContrat = c => {
   return surSite ? `contrats/${c.slug}-${c.taille}.jpg`
     : `${SUPABASE_URL}/storage/v1/object/public/contrats/modeles/${c.slug}-${c.taille}.jpg` + (k ? "?v=" + Date.parse(k.maj_le) : "");
 };
-const imgSceau = v => `sceaux/${SCEAUX[cleVille(v)]}.png`;
+const SCEAUX_V = "2";                              // à augmenter quand on remplace les images de sceaux/
+const imgSceau = v => `sceaux/${SCEAUX[cleVille(v)]}.png?v=${SCEAUX_V}`;
 // Compagnies : table Supabase « compagnies » (Réglages > Compagnies d'exportation, admin)
 let COMPAGNIES = [];
 // les 26 premières ont leurs images dans le dossier contrats/ du site ; les autres dans Supabase
