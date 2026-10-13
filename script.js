@@ -310,12 +310,18 @@ function comboArticle(tr) {
 
   function afficher(q) {
     const mots = sansAccent(q.trim()).split(/\s+/).filter(Boolean);
-    res = CATALOGUE.filter(a => { const t = sansAccent(a.nom + " " + a.cat); return mots.every(m => t.includes(m)); });
+    // on cherche aussi dans les variantes (ex. « casque blancherive » → Casque léger, variante Blancherive)
+    res = [];
+    CATALOGUE.forEach(a => {
+      const t = sansAccent(a.nom + " " + a.cat);
+      if (mots.every(m => t.includes(m))) { res.push({ a, v: "" }); return; }
+      (a.variantes || []).forEach(v => { const tv = t + " " + sansAccent(v); if (mots.every(m => tv.includes(m))) res.push({ a, v }); });
+    });
     idx = res.length ? 0 : -1;
     let cur = null, html = "";
-    res.forEach((a, i) => {
+    res.forEach(({ a, v }, i) => {
       if (a.cat !== cur) { html += `<div class="combo-cat">${esc(a.cat)}</div>`; cur = a.cat; }
-      html += `<div class="combo-opt${i === idx ? " on" : ""}" data-i="${i}"><span>${esc(a.nom)}</span><span class="hint">${fmt(a.prix)}${a.variantes ? " · " + a.variantes.length + " variantes" : ""}</span></div>`;
+      html += `<div class="combo-opt${i === idx ? " on" : ""}" data-i="${i}"><span>${esc(a.nom)}${v ? ` <span class="hint">— ${esc(v)}</span>` : ""}</span><span class="hint">${fmt(a.prix)}${a.variantes && !v ? " · " + a.variantes.length + " variantes" : ""}</span></div>`;
     });
     list.innerHTML = html || `<div class="combo-vide">${CATALOGUE.length ? "Aucun article ne correspond." : "Chargement du catalogue…"}</div>`;
     list.hidden = false;
@@ -326,12 +332,13 @@ function comboArticle(tr) {
     list.querySelectorAll(".combo-opt").forEach(o => o.classList.toggle("on", +o.dataset.i === idx));
     list.querySelector(".combo-opt.on")?.scrollIntoView({ block: "nearest" });
   }
-  function choisir(a) {
+  function choisir({ a, v: variante }) {
     sel.value = a.k; sel.dataset.nom = a.nom;
     list.hidden = true; majTexte();
     sel.dispatchEvent(new Event("change"));
     const v = tr.querySelector(".var");
-    (v.hidden ? tr.querySelector(".q") : v).focus();
+    if (variante && !v.hidden) { v.value = variante; calcForm(); }
+    (v.hidden || variante ? tr.querySelector(".q") : v).focus();
   }
   inp.onfocus = () => { inp.select(); afficher(""); };
   inp.oninput = () => afficher(inp.value);
