@@ -969,7 +969,7 @@ const imgContrat = c => {
   return surSite ? `contrats/${c.slug}-${c.taille}.jpg`
     : `${SUPABASE_URL}/storage/v1/object/public/contrats/modeles/${c.slug}-${c.taille}.jpg` + (k ? "?v=" + Date.parse(k.maj_le) : "");
 };
-const SCEAUX_V = "2";                              // à augmenter quand on remplace les images de sceaux/
+const SCEAUX_V = "3";                              // à augmenter quand on remplace les images de sceaux/
 const imgSceau = v => `sceaux/${SCEAUX[cleVille(v)]}.png?v=${SCEAUX_V}`;
 // Compagnies : table Supabase « compagnies » (Réglages > Compagnies d'exportation, admin)
 let COMPAGNIES = [];
@@ -1041,12 +1041,13 @@ async function imageContrats(contrats, realises = {}, ville = "") {
   const sceaux = await Promise.all(contrats.map((c, i) => {
     return realises[String(i + 1)] && aSceau(ville) ? chargerImage(imgSceau(ville)) : null;
   }));
-  const h = Math.min(900, Math.max(...imgs.map(i => i.naturalHeight))), ecart = 12, marge = 12;   // image allégée pour Discord
+  const h = Math.min(1600, Math.max(...imgs.map(i => i.naturalHeight))), ecart = 12, marge = 12;   // pleine résolution (sceaux nets)
   const largeurs = imgs.map(i => Math.round(i.naturalWidth * h / i.naturalHeight));
   const cv = document.createElement("canvas");
   cv.width = largeurs.reduce((s, w) => s + w, 0) + ecart * (imgs.length - 1) + marge * 2;
   cv.height = h + marge * 2;
   const ctx = cv.getContext("2d");
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#1b1a22"; ctx.fillRect(0, 0, cv.width, cv.height);
   let x = marge;
   imgs.forEach((im, i) => {
@@ -1064,7 +1065,7 @@ async function imageContrats(contrats, realises = {}, ville = "") {
     }
     x += largeurs[i] + ecart;
   });
-  return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.78));
+  return new Promise(ok => cv.toBlob(ok, "image/jpeg", 0.92));
 }
 // Envoi à la fonction Supabase « contrats » : elle poste sur Discord avec l'image en pièce jointe
 async function appelContrats(champs, blob) {
