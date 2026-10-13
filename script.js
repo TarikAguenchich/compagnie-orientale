@@ -1641,12 +1641,18 @@ const FRP_MAX = 20000, FRP_PAS = 500;
 const lingotsFrappe = s => ({ or: s / 50, arg: s / 100 });            // 500 septims = 10 or + 5 argent
 const isoJour = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 function semaineFrp() {                                                  // lundi de la semaine affichée
-  const v = estAdmin() && $("frpSem").value ? new Date($("frpSem").value + "T00:00") : new Date();
-  return lundiDe(v);
+  return estAdmin() && $("frpSem").value ? new Date($("frpSem").value + "T00:00") : lundiDe(new Date());
 }
 async function chargerFrappes() {
   $("frpSemWrap").style.display = estAdmin() ? "" : "none";
-  if (estAdmin() && !$("frpSem").value) $("frpSem").value = isoJour(lundiDe(new Date()));
+  if (estAdmin() && !$("frpSem").options.length) {          // liste des semaines « du lundi au dimanche », 1 an en arrière
+    const l = lundiDe(new Date());
+    for (let i = 0; i < 53; i++) {
+      const lu = new Date(l); lu.setDate(lu.getDate() - 7 * i); const di = new Date(lu); di.setDate(di.getDate() + 6);
+      const f = d => d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+      $("frpSem").add(new Option(`${i === 0 ? "Cette semaine — " : i === 1 ? "Semaine dernière — " : ""}du ${f(lu)} au ${f(di)}/${di.getFullYear()}`, isoJour(lu)));
+    }
+  }
   const [c, l] = await Promise.all([sb.rpc("frappe_chatelleries"), sb.rpc("liste_frappes")]);
   if (c.error || l.error) {
     const m = (c.error || l.error).message;
@@ -1714,6 +1720,9 @@ function renderFrappes() {
   });
 }
 $("frpSem").onchange = () => renderFrappes();
+const bougerSemaine = d => { const s = $("frpSem"), i = s.selectedIndex - d; if (i >= 0 && i < s.options.length) { s.selectedIndex = i; renderFrappes(); } };
+$("frpPrec").onclick = () => bougerSemaine(-1);
+$("frpSuiv").onclick = () => bougerSemaine(1);
 $("frpFiltre").onchange = () => renderFrappes();
 
 /* ---------- Démarrage ---------- */

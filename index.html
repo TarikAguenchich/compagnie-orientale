@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261013f">
+<link rel="stylesheet" href="style.css?v=20261013g">
 </head>
 <body>
 <!-- Connexion -->
@@ -144,7 +144,7 @@
       <h2>Frappe de septims <span class="hint" id="frpSemLib"></span></h2>
       <p class="hint" style="margin-top:0">Une frappe par châtellerie et par semaine (du lundi au dimanche), <b>20 000 septims au maximum</b>.
       Il faut <b>10 lingots d'or et 5 lingots d'argent pour 500 septims</b> (20 000 septims = 400 or + 200 argent). Le coffre de la zone paie les septims et reçoit les lingots.</p>
-      <div class="row" id="frpSemWrap" style="display:none;margin-bottom:10px"><div style="min-width:220px"><label for="frpSem">Semaine <span class="hint">(admin)</span></label><input type="date" id="frpSem"></div></div>
+      <div class="row" id="frpSemWrap" style="display:none;margin-bottom:10px"><div class="frp-sem"><label for="frpSem">Semaine <span class="hint">(admin)</span></label><div class="row"><button type="button" class="btn small" id="frpPrec" title="Semaine précédente">◀</button><select id="frpSem"></select><button type="button" class="btn small" id="frpSuiv" title="Semaine suivante">▶</button></div></div></div>
       <div class="msg" id="frpMsg"></div>
       <div id="frpListe"></div>
     </div>
@@ -336,6 +336,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261013f"></script>
+<script src="script.js?v=20261013g"></script>
 </body>
 </html>

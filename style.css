@@ -272,3 +272,5 @@ select:disabled{opacity:.75;cursor:not-allowed}
 .frp-saisie label{margin-bottom:2px}
 .frp-besoin{font-size:.9rem;margin:6px 0}
 .frp-tot td{border-top:1px solid var(--line);font-weight:600}
+.frp-sem .row{gap:6px;flex-wrap:nowrap}
+.frp-sem select{min-width:0;max-width:340px}
