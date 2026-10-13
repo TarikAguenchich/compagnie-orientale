@@ -123,7 +123,7 @@ function ecouter() { sb.channel("maj")
   .on("postgres_changes", { event: "*", schema: "public", table: "brouillons" }, majZone)
   .subscribe(); }
 // Filet de sécurité : rechargement quand on revient sur l'onglet
-document.addEventListener("visibilitychange", () => { if (!document.hidden && ROLE) { chargerZone(); if (!$("viewCtr").hidden) chargerSuivi(); chargerCatalogue(); chargerHist(); chargerReglages(); if (estAdmin()) chargerComptes(); } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && ROLE) { chargerZone(); if (!$("viewCtr").hidden) chargerSuivi(); if (!$("viewFrp").hidden) chargerFrappes(); if (!$("viewCpt").hidden) chargerCompta(); chargerCatalogue(); chargerHist(); chargerReglages(); if (estAdmin()) chargerComptes(); } });
 
 /* ---------- Confirmation dans la page ---------- */
 function confirmer(txt) {
@@ -139,12 +139,13 @@ function confirmer(txt) {
 let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
   if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr" || t === "cpt")) t = "perm";
-  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", ctr: "viewCtr", cpt: "viewCpt", cat: "viewCat", reg: "viewReg" };
-  ["viewPerm", "viewHist", "viewStock", "viewCtr", "viewCpt", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
+  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", frp: "viewFrp", ctr: "viewCtr", cpt: "viewCpt", cat: "viewCat", reg: "viewReg" };
+  ["viewPerm", "viewHist", "viewStock", "viewFrp", "viewCtr", "viewCpt", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
   if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); }
   if (t === "stock") renderStock();
   if (t === "cpt") chargerCompta();
-  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["ctr", "tabCtr"], ["cpt", "tabCpt"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
+  if (t === "frp") chargerFrappes();
+  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["frp", "tabFrp"], ["ctr", "tabCtr"], ["cpt", "tabCpt"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
   if (t === "cat") renderCat();
   if (t === "reg") renderReg();
@@ -156,6 +157,7 @@ $("tabEnc").onclick = () => showTab("enc");
 $("tabStock").onclick = () => showTab("stock");
 $("tabCtr").onclick = () => showTab("ctr");
 $("tabCpt").onclick = () => showTab("cpt");
+$("tabFrp").onclick = () => showTab("frp");
 $("tabCat").onclick = () => showTab("cat");
 $("tabReg").onclick = () => showTab("reg");
 
@@ -1420,7 +1422,6 @@ function demarrer() {
 var KJ = null, KLOY = [];            // journal complet (rpc compta_journal) et loyers actuels
 const ZONES_K = [1, 2, 3, 4, 5, 6, 7];
 const TYPES_K = { commande: "Commande", contrat: "Contrat", loyer: "Loyer", frappe: "Frappe", manuel: "Manuel" };
-const FRAPPE_MAX = { or: 400, arg: 200, sep: 20000 };          // repère par zone et par semaine (avertissement)
 const septimsSigne = n => (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n));
 const septimsNeg = n => (n < 0 ? "−" : "") + fmt(Math.abs(n));
 const cleObjet = n => sansAccent(n).replace(/s\b/g, "").replace(/\s+/g, " ").trim();   // « Lingots d'or » = « lingot d'or »
@@ -1453,19 +1454,14 @@ function inventaire(lignes) {
   }));
   return [...m.values()].filter(e => e.q !== 0).sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
 }
-// frappe d'une zone sur la semaine en cours
+// septims frappés par une zone sur la semaine en cours
 function frappeSemaine(z) {
-  const l = lundiDe(new Date()), f = { or: 0, arg: 0, sep: 0 };
-  (KJ || []).filter(r => r.type === "frappe" && r.zone_id === z && r.t >= l).forEach(r => {
-    f.sep -= r.montant;
-    (r.ressources || []).forEach(x => { const k = cleObjet(x.nom); if (/\bor$/.test(k)) f.or += Number(x.qte) || 0; else if (/argent$/.test(k)) f.arg += Number(x.qte) || 0; });
-  });
-  f.trop = f.or > FRAPPE_MAX.or || f.arg > FRAPPE_MAX.arg || f.sep > FRAPPE_MAX.sep;
-  return f;
+  const l = lundiDe(new Date());
+  return (KJ || []).filter(r => r.type === "frappe" && r.zone_id === z && r.t >= l).reduce((s, r) => s - r.montant, 0);
 }
 async function chargerCompta() {
   if (!estAdmin()) return;
-  if ($("kZone").options.length === 1) ZONES_K.forEach(z => ["kZone", "mZone", "fZone"].forEach(id => $(id).add(new Option("Zone " + z, z))));
+  if ($("kZone").options.length === 1) ZONES_K.forEach(z => ["kZone", "mZone"].forEach(id => $(id).add(new Option("Zone " + z, z))));
   if (!$("mObjets").children.length) ajouterObjet();
   const [j, l] = await Promise.all([sb.rpc("compta_journal"), sb.rpc("loyers_actuels")]);
   if (j.error || l.error) {
@@ -1492,7 +1488,7 @@ function renderCompta() {
       <div class="k-solde${solde < 0 ? " neg" : ""}">${septimsNeg(solde)}</div>
       <div class="k-es"><span class="pos">▲ ${fmt(ent)}</span><span class="neg">▼ ${fmt(sor)}</span><span class="hint">${esc(libPer)}</span></div>
       ${z != null ? `<div class="hint">Loyer : ${loy && loy.montant ? fmt(loy.montant) + " / semaine" : "aucun"}</div>
-        <div class="hint${f.trop ? " k-alerte" : ""}">Frappe cette semaine : ${f.or} or · ${f.arg} argent · ${fmt(f.sep)}${f.trop ? " ⚠ au-dessus du maximum" : ""}</div>`
+        <div class="hint">Frappe cette semaine : ${f ? fmt(f) : "aucune"}</div>`
         : `<div class="hint">Permanences dont la zone est introuvable (coffre / châtellerie sans zone)</div>`}
       <div class="k-inv"><div class="k-invt">Objets dans le coffre</div>${inv.length
         ? inv.map(e => `<div><span>${esc(e.nom)}</span><b${e.q < 0 ? ' class="neg"' : ""}>${e.q < 0 ? "−" : ""}${Math.abs(e.q).toLocaleString("fr-FR")}</b></div>`).join("")
@@ -1529,7 +1525,6 @@ function renderCompta() {
   });
   $("kResList").innerHTML = inventaire(KJ.map(r => ({ ressources: (r.ressources || []).map(x => ({ nom: x.nom, qte: 1 })) })))
     .map(e => `<option value="${esc(e.nom)}">`).join("");
-  majEtatFrappe();
 
   // 4. Loyers
   $("kLoyers").innerHTML = `<table class="zones k-loy"><thead><tr><th>Zone</th><th>Loyer / semaine</th><th></th></tr></thead><tbody>${
@@ -1617,7 +1612,7 @@ function ajouterObjet() {
 }
 $("mObjAdd").onclick = () => ajouterObjet();
 ["kPer", "kDu", "kAu", "kZone", "kType"].forEach(id => $(id).onchange = () => {
-  if (id === "kZone" && $("kZone").value) $("mZone").value = $("fZone").value = $("kZone").value;
+  if (id === "kZone" && $("kZone").value) $("mZone").value = $("kZone").value;
   renderCompta();
 });
 $("kMaj").onclick = () => chargerCompta();
@@ -1640,27 +1635,86 @@ $("mAdd").onclick = async () => {
   ["mMontant", "mLib"].forEach(id => $(id).value = ""); $("mObjets").innerHTML = ""; ajouterObjet();
   flash($("mMsg"), "Mouvement ajouté ✔", true); chargerCompta();
 };
-// Frappe de septims
-function majEtatFrappe() {
-  if (!KJ) return;
-  const z = Number($("fZone").value) || 1, f = frappeSemaine(z);
-  const or = f.or + (Math.round(Number($("fOr").value)) || 0), arg = f.arg + (Math.round(Number($("fArg").value)) || 0), sep = f.sep + (Math.round(Number($("fSep").value)) || 0);
-  const trop = [or > FRAPPE_MAX.or && `or ${or}/${FRAPPE_MAX.or}`, arg > FRAPPE_MAX.arg && `argent ${arg}/${FRAPPE_MAX.arg}`, sep > FRAPPE_MAX.sep && `${fmt(sep)}/${fmt(FRAPPE_MAX.sep)}`].filter(Boolean);
-  $("fEtat").className = "hint" + (trop.length ? " k-alerte" : "");
-  $("fEtat").textContent = `Zone ${z}, cette semaine : ${f.or} or · ${f.arg} argent · ${fmt(f.sep)} déjà frappés.` + (trop.length ? ` ⚠ Avec cette frappe : au-dessus du maximum (${trop.join(", ")}).` : "");
+/* ---------- Frappe de septims : une par châtellerie et par semaine (intendant, secrétaire, admin) ---------- */
+var FRP = { chats: [], liste: [] };
+const FRP_MAX = 20000, FRP_PAS = 500;
+const lingotsFrappe = s => ({ or: s / 50, arg: s / 100 });            // 500 septims = 10 or + 5 argent
+const isoJour = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function semaineFrp() {                                                  // lundi de la semaine affichée
+  const v = estAdmin() && $("frpSem").value ? new Date($("frpSem").value + "T00:00") : new Date();
+  return lundiDe(v);
 }
-["fZone", "fOr", "fArg", "fSep"].forEach(id => $(id).oninput = $(id).onchange = majEtatFrappe);
-$("fAdd").onclick = async () => {
-  const or = Math.round(Number($("fOr").value) || 0), arg = Math.round(Number($("fArg").value) || 0), sep = Math.round(Number($("fSep").value) || 0);
-  if (or < 0 || arg < 0 || sep < 0) return flash($("fMsg"), "Mets des nombres positifs.", false);
-  if (!or && !arg) return flash($("fMsg"), "Indique les lingots d'or et/ou d'argent reçus.", false);
-  if (!sep) return flash($("fMsg"), "Indique les septims payés.", false);
-  const z = Number($("fZone").value);
-  const ressources_ = [or && { nom: "Lingots d'or", qte: or }, arg && { nom: "Lingots d'argent", qte: arg }].filter(Boolean);
-  if (!await mouvement({ zone: z, type_: "frappe", montant_: -sep, libelle_: $("fLib").value.trim() || "Frappe de septims", ressources_ }, $("fAdd"), $("fMsg"))) return;
-  ["fOr", "fArg", "fSep", "fLib"].forEach(id => $(id).value = "");
-  flash($("fMsg"), `Zone ${z} : frappe enregistrée ✔`, true); chargerCompta();
-};
+async function chargerFrappes() {
+  $("frpSemWrap").style.display = estAdmin() ? "" : "none";
+  if (estAdmin() && !$("frpSem").value) $("frpSem").value = isoJour(lundiDe(new Date()));
+  const [c, l] = await Promise.all([sb.rpc("frappe_chatelleries"), sb.rpc("liste_frappes")]);
+  if (c.error || l.error) {
+    const m = (c.error || l.error).message;
+    return flash($("frpMsg"), "Frappes non chargées : " + m + (/frappe/i.test(m) ? " (as-tu lancé 31_frappe.sql ?)" : ""), false);
+  }
+  FRP = { chats: c.data || [], liste: l.data || [] };
+  const f = $("frpFiltre"), v = f.value;
+  f.innerHTML = '<option value="">Toutes</option>' + FRP.chats.map(x => `<option>${esc(x.chatellerie)}</option>`).join("");
+  f.value = v;
+  renderFrappes();
+}
+function renderFrappes() {
+  const lundi = semaineFrp(), sem = isoJour(lundi), dim = new Date(lundi); dim.setDate(dim.getDate() + 6);
+  const courante = sem === isoJour(lundiDe(new Date())), modifiable = courante || estAdmin();
+  $("frpSemLib").textContent = `— semaine du ${lundi.toLocaleDateString("fr-FR")} au ${dim.toLocaleDateString("fr-FR")}`;
+  const options = sel => Array.from({ length: FRP_MAX / FRP_PAS }, (_, i) => (i + 1) * FRP_PAS)
+    .map(n => `<option value="${n}" ${n === sel ? "selected" : ""}>${n.toLocaleString("fr-FR")}</option>`).join("");
+  $("frpListe").innerHTML = FRP.chats.length ? `<div class="frp-grille">${FRP.chats.map(c => {
+    const d = FRP.liste.find(x => x.chatellerie === c.chatellerie && x.semaine === sem), s = d ? d.septims : FRP_MAX, l = lingotsFrappe(s);
+    return `<div class="frp-carte${d ? " faite" : ""}" data-ch="${esc(c.chatellerie)}">
+      <div class="frp-tete"><b>${esc(c.chatellerie)}</b><span class="hint">Zone ${c.zone_id}</span></div>
+      ${d ? `<div class="frp-ok">✔ Frappe déclarée : <b>${fmt(d.septims)}</b><br><span class="hint">${d.lingots_or} lingots d'or · ${d.lingots_argent} lingots d'argent · par ${esc(d.declare_par || "?")} le ${new Date(d.declare_le).toLocaleString("fr-FR")}</span></div>`
+          : `<div class="hint">${courante ? "Pas encore de frappe cette semaine." : "Aucune frappe cette semaine-là."}</div>`}
+      ${modifiable ? `<div class="frp-saisie"><label>Septims à frapper</label><select class="frp-s">${options(s)}</select>
+        <div class="frp-besoin">Il faut <b class="frp-or">${l.or}</b> lingots d'or et <b class="frp-arg">${l.arg}</b> lingots d'argent</div>
+        <div class="row"><button type="button" class="btn ${d ? "" : "primary"} small frp-go">${d ? "Corriger" : "Déclarer la frappe"}</button>
+        ${d ? `<button type="button" class="btn small frp-del" data-id="${d.id}">Annuler</button>` : ""}</div></div>` : ""}
+    </div>`;
+  }).join("")}</div>` : '<p class="empty">Aucune châtellerie : tu n\'es affecté(e) à aucune zone.</p>';
+  $("frpListe").querySelectorAll(".frp-carte").forEach(card => {
+    const sel = card.querySelector(".frp-s"); if (!sel) return;
+    sel.onchange = () => { const l = lingotsFrappe(Number(sel.value)); card.querySelector(".frp-or").textContent = l.or; card.querySelector(".frp-arg").textContent = l.arg; };
+    card.querySelector(".frp-go").onclick = async e => {
+      const ch = card.dataset.ch, s = Number(sel.value), l = lingotsFrappe(s);
+      if (!await confirmer(`${ch} : frapper ${fmt(s)} contre ${l.or} lingots d'or et ${l.arg} lingots d'argent (semaine du ${lundi.toLocaleDateString("fr-FR")}) ?`)) return;
+      e.target.disabled = true;
+      const { error } = await sb.rpc("declarer_frappe", { chatellerie_: ch, septims_: s, semaine_: sem });
+      e.target.disabled = false;
+      if (error) return flash($("frpMsg"), "Non enregistré : " + error.message, false);
+      flash($("frpMsg"), `${ch} : frappe de ${fmt(s)} enregistrée ✔`, true); chargerFrappes();
+    };
+    const del = card.querySelector(".frp-del");
+    if (del) del.onclick = async () => {
+      if (!await confirmer(`Annuler la frappe de ${card.dataset.ch} pour cette semaine ?`)) return;
+      const { error } = await sb.rpc("annuler_frappe", { frappe: Number(del.dataset.id) });
+      if (error) return flash($("frpMsg"), "Non annulé : " + error.message, false);
+      flash($("frpMsg"), `${card.dataset.ch} : frappe annulée.`, true); chargerFrappes();
+    };
+  });
+  // historique
+  const fc = $("frpFiltre").value, h = FRP.liste.filter(x => !fc || x.chatellerie === fc);
+  const tot = h.reduce((a, x) => ({ s: a.s + x.septims, o: a.o + x.lingots_or, g: a.g + x.lingots_argent }), { s: 0, o: 0, g: 0 });
+  $("frpNb").textContent = h.length;
+  $("frpHist").innerHTML = h.length ? `<div class="k-table"><table class="k-jr"><thead><tr><th>Semaine</th><th>Châtellerie</th><th class="r">Septims</th><th class="r">Or</th><th class="r">Argent</th><th>Déclarée par</th>${estAdmin() ? "<th></th>" : ""}</tr></thead><tbody>${
+    h.map(x => `<tr><td>${new Date(x.semaine + "T00:00").toLocaleDateString("fr-FR")}</td><td>${esc(x.chatellerie)} <span class="hint">· zone ${x.zone_id}</span></td>
+      <td class="r">${fmt(x.septims)}</td><td class="r">${x.lingots_or}</td><td class="r">${x.lingots_argent}</td>
+      <td class="hint">${esc(x.declare_par || "?")} · ${new Date(x.declare_le).toLocaleDateString("fr-FR")}</td>
+      ${estAdmin() ? `<td><button type="button" class="x" title="Supprimer cette frappe" data-frp="${x.id}">×</button></td>` : ""}</tr>`).join("")}
+    <tr class="frp-tot"><td colspan="2"><b>Total</b></td><td class="r">${fmt(tot.s)}</td><td class="r">${tot.o}</td><td class="r">${tot.g}</td><td></td>${estAdmin() ? "<td></td>" : ""}</tr></tbody></table></div>`
+    : '<p class="empty">Aucune frappe déclarée.</p>';
+  $("frpHist").querySelectorAll("[data-frp]").forEach(b => b.onclick = async () => {
+    if (!await confirmer("Supprimer cette frappe ?")) return;
+    const { error } = await sb.rpc("annuler_frappe", { frappe: Number(b.dataset.frp) });
+    if (error) flash($("frpMsg"), "Non supprimé : " + error.message, false); else chargerFrappes();
+  });
+}
+$("frpSem").onchange = () => renderFrappes();
+$("frpFiltre").onchange = () => renderFrappes();
 
 /* ---------- Démarrage ---------- */
 if (SUPABASE_URL.includes("XXXXXXXX")) ecranConnexion("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.", false);

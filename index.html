@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261013e">
+<link rel="stylesheet" href="style.css?v=20261013f">
 </head>
 <body>
 <!-- Connexion -->
@@ -34,6 +34,7 @@
     <button type="button" id="tabEnc">Commandes en cours <span class="badge" id="nbEnc" hidden>0</span></button>
     <button type="button" id="tabHist">Historique</button>
     <button type="button" id="tabStock">Stock</button>
+    <button type="button" id="tabFrp">Frappe de septims</button>
     <button type="button" id="tabCtr" hidden>Contrats d'exportation</button>
     <button type="button" id="tabCpt" hidden>Compta</button>
     <button type="button" id="tabCat" hidden>Catalogue</button>
@@ -137,6 +138,23 @@
     <div class="card"><h2>Détail par châtellerie et client</h2><div id="stockDetail"></div></div>
   </div>
 
+  <!-- Frappe de septims : une par châtellerie et par semaine -->
+  <div id="viewFrp" hidden>
+    <div class="card">
+      <h2>Frappe de septims <span class="hint" id="frpSemLib"></span></h2>
+      <p class="hint" style="margin-top:0">Une frappe par châtellerie et par semaine (du lundi au dimanche), <b>20 000 septims au maximum</b>.
+      Il faut <b>10 lingots d'or et 5 lingots d'argent pour 500 septims</b> (20 000 septims = 400 or + 200 argent). Le coffre de la zone paie les septims et reçoit les lingots.</p>
+      <div class="row" id="frpSemWrap" style="display:none;margin-bottom:10px"><div style="min-width:220px"><label for="frpSem">Semaine <span class="hint">(admin)</span></label><input type="date" id="frpSem"></div></div>
+      <div class="msg" id="frpMsg"></div>
+      <div id="frpListe"></div>
+    </div>
+    <div class="card">
+      <h2>Frappes déclarées <span class="badge" id="frpNb">0</span></h2>
+      <div class="row" style="margin-bottom:10px"><div style="min-width:220px"><label for="frpFiltre">Châtellerie</label><select id="frpFiltre"><option value="">Toutes</option></select></div></div>
+      <div id="frpHist"></div>
+    </div>
+  </div>
+
   <!-- Contrats d'exportation (tirage : admin ; suivi : admin + intendants) -->
   <div id="viewCtr" hidden>
     <div class="card" id="ctrTirage">
@@ -208,21 +226,6 @@
       <button type="button" class="btn small" id="mObjAdd">+ Objet</button>
       <div class="row" style="margin-top:10px"><button type="button" class="btn primary" id="mAdd">Ajouter</button></div>
       <div class="msg" id="mMsg"></div>
-    </div>
-
-    <div class="card">
-      <h2>Frappe de septims</h2>
-      <p class="hint" style="margin-top:0">Le coffre de la zone <b>paie des septims</b> et <b>reçoit des lingots</b> d'or et d'argent. Repère : <b>400 lingots d'or + 200 d'argent = 20 000 septims</b> au maximum (avertissement seulement, rien n'est bloqué).</p>
-      <div class="k-form">
-        <div><label for="fZone">Zone</label><select id="fZone"></select></div>
-        <div><label for="fOr">Lingots d'or reçus</label><input type="number" id="fOr" min="0" step="1" placeholder="0"></div>
-        <div><label for="fArg">Lingots d'argent reçus</label><input type="number" id="fArg" min="0" step="1" placeholder="0"></div>
-        <div><label for="fSep">Septims payés</label><input type="number" id="fSep" min="0" step="1" placeholder="0"></div>
-        <div class="k-lib2"><label for="fLib">Libellé <span class="hint">(facultatif)</span></label><input id="fLib" placeholder="ex. Lingots achetés à Brynjolf" autocomplete="off"></div>
-      </div>
-      <p class="hint" id="fEtat"></p>
-      <div class="row"><button type="button" class="btn primary" id="fAdd">Enregistrer la frappe</button></div>
-      <div class="msg" id="fMsg"></div>
     </div>
 
     <div class="card">
@@ -333,6 +336,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261013e"></script>
+<script src="script.js?v=20261013f"></script>
 </body>
 </html>
