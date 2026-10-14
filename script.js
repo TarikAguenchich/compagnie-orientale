@@ -1460,7 +1460,8 @@ function demarrer() {
 }
 
 /* ---------- Compta des coffres (admin) : entrées / sorties, soldes, inventaire, frappe, stats, loyers ---------- */
-var KJ = null, KLOY = [];            // journal complet (rpc compta_journal) et loyers actuels
+var KJ = null, KJR = [], KLOY = [];   // KJR : mouvements retirés de la compta
+            // journal complet (rpc compta_journal) et loyers actuels
 const ZONES_K = [1, 2, 3, 4, 5, 6, 7];
 const TYPES_K = { commande: "Commande", contrat: "Contrat", loyer: "Loyer", frappe: "Frappe", manuel: "Manuel" };
 const septimsSigne = n => (n > 0 ? "+" : n < 0 ? "−" : "") + fmt(Math.abs(n));
@@ -1509,7 +1510,8 @@ async function chargerCompta() {
     const m = (j.error || l.error).message;
     return flash($("kMsg"), "Compta non chargée : " + m + (/compta_journal|loyers_actuels|function/i.test(m) ? " (as-tu lancé 29_compta.sql et 30_compta_frappe.sql ?)" : ""), false);
   }
-  KJ = (j.data || []).map(r => ({ ...r, montant: Number(r.montant) || 0, t: new Date(r.le) })).sort((a, b) => b.t - a.t);
+  const tout = (j.data || []).map(r => ({ ...r, montant: Number(r.montant) || 0, t: new Date(r.le) })).sort((a, b) => b.t - a.t);
+  KJ = tout.filter(r => !r.retire); KJR = tout.filter(r => r.retire);
   KLOY = l.data || [];
   renderCompta();
 }
@@ -1543,26 +1545,57 @@ function renderCompta() {
 
   // 3. Journal
   const ty = $("kType").value;
-  const lignes = per.filter(r => (zf == null || r.zone_id === zf) && (!ty || r.type === ty));
+  const voirRetires = $("kRetires").checked;
+  const lignes = (voirRetires ? [...per, ...KJR.filter(r => (!du || r.t >= du) && (!au || r.t < au))].sort((a, b) => b.t - a.t) : per)
+    .filter(r => (zf == null || r.zone_id === zf) && (!ty || r.type === ty));
+  $("kRetNb").textContent = KJR.length ? `(${KJR.length})` : "";
   let solde = zf != null ? KJ.filter(r => r.zone_id === zf && (!au || r.t < au)).reduce((s, r) => s + r.montant, 0) : null;
   const MAX = 300, avecSolde = zf != null && !ty;
   $("kNb").textContent = lignes.length;
   $("kJournal").innerHTML = lignes.length ? `<div class="k-table"><table class="k-jr"><thead><tr><th>Date</th>${zf == null ? "<th>Zone</th>" : ""}<th>Mouvement</th><th class="r">Septims</th>${avecSolde ? '<th class="r">Solde</th>' : ""}<th></th></tr></thead><tbody>${
     lignes.slice(0, MAX).map(r => {
-      const s = solde; if (solde != null) solde -= r.montant;
+      const s = solde; if (solde != null && !r.retire) solde -= r.montant;
       const res = (r.ressources || []).filter(x => Number(x.qte)).map(x => `${Number(x.qte) > 0 ? "+" : "−"}${Math.abs(Number(x.qte)).toLocaleString("fr-FR")} ${esc(x.nom)}`).join(" · ");
-      return `<tr><td class="k-d">${r.t.toLocaleDateString("fr-FR")}<br><span class="hint">${r.t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span></td>
+      const loyer = r.type === "loyer" && !r.retire;
+      return `<tr class="${r.retire ? "k-retire" : ""}"><td class="k-d">${r.t.toLocaleDateString("fr-FR")}<br><span class="hint">${r.t.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</span></td>
         ${zf == null ? `<td>${esc(nomZone(r.zone_id, true))}</td>` : ""}
-        <td><span class="k-type">${TYPES_K[r.type] || r.type}</span> ${esc(r.libelle)}${res ? `<br><span class="hint">Objets : ${res}</span>` : ""}${r.detail?.par ? `<br><span class="hint">par ${esc(r.detail.par)}</span>` : ""}</td>
-        <td class="r ${r.montant > 0 ? "pos" : r.montant < 0 ? "neg" : ""}">${r.montant ? septimsSigne(r.montant) : "—"}</td>
-        ${avecSolde ? `<td class="r">${septimsNeg(s)}</td>` : ""}
-        <td>${r.type === "manuel" || r.type === "frappe" ? `<button type="button" class="x" title="Supprimer ce mouvement" data-mvt="${esc(r.detail?.id)}">×</button>` : ""}</td></tr>`;
+        <td><span class="k-type">${TYPES_K[r.type] || r.type}</span> ${esc(r.libelle)}${res ? `<br><span class="hint">Objets : ${res}</span>` : ""}${r.type === "loyer" && r.detail?.modifie ? `<br><span class="hint">modifié${r.detail.par ? " par " + esc(r.detail.par) : ""} (prévu : ${fmt(r.detail.prevu)})</span>` : r.detail?.par ? `<br><span class="hint">par ${esc(r.detail.par)}</span>` : ""}${r.retire ? '<br><span class="tag err">Retiré de la compta</span>' : ""}</td>
+        <td class="r ${r.retire ? "" : r.montant > 0 ? "pos" : r.montant < 0 ? "neg" : ""}">${loyer ? `<span class="k-loyer-m">${r.montant ? septimsSigne(r.montant) : "—"}</span>` : r.montant ? septimsSigne(r.montant) : "—"}</td>
+        ${avecSolde ? `<td class="r">${r.retire ? "" : septimsNeg(s)}</td>` : ""}
+        <td class="k-act">${loyer ? `<button type="button" class="k-ico" title="Changer le montant de ce loyer" data-loy="${esc(r.ref)}">✎</button>` : ""}${r.retire
+          ? `<button type="button" class="btn small" data-ret="${esc(r.ref)}">Rétablir</button>`
+          : `<button type="button" class="x" title="${/^(mvt|frappe)\|/.test(r.ref) ? "Supprimer ce mouvement" : "Retirer de la compta"}" data-sup="${esc(r.ref)}">×</button>`}</td></tr>`;
     }).join("")}</tbody></table></div>${lignes.length > MAX ? `<p class="hint">Les ${MAX} plus récents sont affichés : réduis la période pour voir le reste.</p>` : ""}`
     : '<p class="empty">Aucun mouvement sur cette période.</p>';
-  $("kJournal").querySelectorAll("[data-mvt]").forEach(b => b.onclick = async () => {
-    if (!await confirmer("Supprimer ce mouvement ?")) return;
-    const { error } = await sb.from("mouvements").delete().eq("id", b.dataset.mvt);
-    if (error) flash($("kMsg"), "Non supprimé : " + error.message, false); else { flash($("kMsg"), "Mouvement supprimé.", true); chargerCompta(); }
+  const fin = (error, ok) => { if (error) flash($("kMsg"), "Non enregistré : " + error.message + (/retirer_mouvement|modifier_loyer_semaine/.test(error.message) ? " (as-tu lancé 34_loyer_modifiable.sql ?)" : ""), false); else { flash($("kMsg"), ok, true); chargerCompta(); } };
+  $("kJournal").querySelectorAll("[data-sup]").forEach(b => b.onclick = async () => {
+    const ref = b.dataset.sup, [genre, id] = ref.split("|"), r = KJ.find(x => x.ref === ref);
+    if (genre === "mvt") {                 // mouvement manuel : supprimé pour de bon
+      if (!await confirmer(`Supprimer « ${r?.libelle || "ce mouvement"} » ?`)) return;
+      const { error } = await sb.from("mouvements").delete().eq("id", id); return fin(error, "Mouvement supprimé.");
+    }
+    if (genre === "frappe") {              // frappe déclarée : annulée (disparaît aussi de l'onglet Frappe)
+      if (!await confirmer(`Annuler « ${r?.libelle || "cette frappe"} » ? Elle disparaît aussi de l'onglet Frappe de septims.`)) return;
+      const { error } = await sb.rpc("annuler_frappe", { frappe: Number(id) }); return fin(error, "Frappe annulée.");
+    }
+    // commande, contrat, loyer : retiré de la compta seulement (la commande / le contrat ne change pas)
+    if (!await confirmer(`Retirer « ${r?.libelle || "ce mouvement"} » de la compta ? La ${genre === "loyer" ? "ligne de loyer" : r?.type === "contrat" ? "case du contrat" : "commande"} n'est pas modifiée, et tu pourras le rétablir (case « Voir les mouvements retirés »).`)) return;
+    const { error } = await sb.rpc("retirer_mouvement", { ref_: ref, retirer: true }); fin(error, "Mouvement retiré de la compta.");
+  });
+  $("kJournal").querySelectorAll("[data-ret]").forEach(b => b.onclick = async () => {
+    const { error } = await sb.rpc("retirer_mouvement", { ref_: b.dataset.ret, retirer: false }); fin(error, "Mouvement rétabli.");
+  });
+  $("kJournal").querySelectorAll("[data-loy]").forEach(b => b.onclick = () => {
+    const r = KJ.find(x => x.ref === b.dataset.loy), td = b.closest("tr").querySelector(".k-loyer-m"); if (!r || !td) return;
+    td.innerHTML = `<input type="number" min="0" step="1" class="k-loy-in" value="${-r.montant}"> <button type="button" class="btn small k-loy-ok">OK</button>${r.detail?.modifie ? ` <button type="button" class="btn small k-loy-raz" title="Revenir au loyer prévu (${fmt(r.detail.prevu)})">Prévu</button>` : ""}`;
+    const inp = td.querySelector("input"); inp.focus(); inp.select();
+    const envoyer = async montant => {
+      const { error } = await sb.rpc("modifier_loyer_semaine", { zone: r.detail.zone, semaine_: r.detail.semaine, montant_: montant });
+      fin(error, montant == null ? "Loyer remis au montant prévu." : `Loyer de la semaine du ${new Date(r.detail.semaine + "T00:00").toLocaleDateString("fr-FR")} : ${fmt(montant)}.`);
+    };
+    td.querySelector(".k-loy-ok").onclick = () => { const m = Math.round(Number(inp.value)); if (m >= 0) envoyer(m); };
+    inp.onkeydown = e => { if (e.key === "Enter") td.querySelector(".k-loy-ok").click(); if (e.key === "Escape") renderCompta(); };
+    td.querySelector(".k-loy-raz")?.addEventListener("click", () => envoyer(null));
   });
   $("kResList").innerHTML = inventaire(KJ.map(r => ({ ressources: (r.ressources || []).map(x => ({ nom: x.nom, qte: 1 })) })))
     .map(e => `<option value="${esc(e.nom)}">`).join("");
@@ -1652,7 +1685,7 @@ function ajouterObjet() {
   $("mObjets").append(d);
 }
 $("mObjAdd").onclick = () => ajouterObjet();
-["kPer", "kDu", "kAu", "kZone", "kType"].forEach(id => $(id).onchange = () => {
+["kPer", "kDu", "kAu", "kZone", "kType", "kRetires"].forEach(id => $(id).onchange = () => {
   if (id === "kZone" && $("kZone").value) $("mZone").value = $("kZone").value;
   renderCompta();
 });

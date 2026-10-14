@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261014b">
+<link rel="stylesheet" href="style.css?v=20261014c">
 </head>
 <body>
 <!-- Connexion -->
@@ -211,7 +211,9 @@
       <div class="row" style="margin-bottom:10px">
         <div style="min-width:200px"><label for="kType">Type</label><select id="kType"><option value="">Tous</option>
           <option value="commande">Commandes payées</option><option value="contrat">Contrats d'export</option><option value="loyer">Loyers</option><option value="frappe">Frappe de septims</option><option value="manuel">Manuels</option></select></div>
+        <label class="liv" style="align-self:flex-end;margin-bottom:8px"><input type="checkbox" id="kRetires"> Voir les mouvements retirés <span class="hint" id="kRetNb"></span></label>
       </div>
+      <p class="hint" style="margin-top:0">✎ change le montant d'un loyer pour cette semaine seulement. × : un mouvement manuel est supprimé, une frappe est annulée ; une commande, un contrat ou un loyer est <b>retiré de la compta</b> (rien d'autre ne change, rétablissable).</p>
       <div id="kJournal"></div>
       <h3 class="k-titre">Ajouter un mouvement manuel</h3>
       <p class="hint" style="margin-top:0">Correction, retrait, revente d'objets… Indique un montant et/ou des objets avec leur quantité (le sens s'applique à tout).</p>
@@ -336,6 +338,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261014b"></script>
+<script src="script.js?v=20261014c"></script>
 </body>
 </html>
