@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261014a">
+<link rel="stylesheet" href="style.css?v=20261014b">
 </head>
 <body>
 <!-- Connexion -->
@@ -197,7 +197,7 @@
     <div class="card">
       <h2>Coffres des zones <button type="button" class="btn small" id="kMaj" style="margin-left:auto">Actualiser</button></h2>
       <p class="hint" style="margin-top:0">Le <b>solde</b> est ce qu'il y a dans le coffre aujourd'hui (tout l'historique). Entrées et sorties : sur la période choisie.<br>
-      Entrées = commandes <b>payées</b> (septims + pièces fournies par le client). Sorties = contrats d'export réalisés (le coffre paie le prix et reçoit les ressources), frappe de septims (le coffre paie et reçoit les lingots) et loyer du pied-à-terre chaque lundi.</p>
+      Entrées = commandes <b>payées</b> (septims + pièces fournies par le client). Sorties = contrats d'export réalisés (le coffre paie le prix et reçoit les ressources), frappe de septims (le coffre paie et reçoit les lingots) et loyer du pied-à-terre chaque semaine.</p>
       <div id="kCoffres" class="k-coffres"></div>
     </div>
 
@@ -230,7 +230,7 @@
 
     <div class="card">
       <h2>Loyers des pieds-à-terre</h2>
-      <p class="hint" style="margin-top:0">Montant prélevé <b>chaque lundi</b> sur le coffre de la zone. Un changement s'applique à partir d'aujourd'hui (les semaines passées gardent l'ancien montant). 0 = pas de loyer.</p>
+      <p class="hint" style="margin-top:0">Montant prélevé <b>une fois par semaine</b> (lundi → dimanche) sur le coffre de la zone, <b>dès la semaine où il est fixé</b>. Un changement compte pour la semaine en cours ; les semaines passées gardent leur montant. 0 = pas de loyer.</p>
       <div class="msg" id="lMsg"></div>
       <div id="kLoyers"></div>
     </div>
@@ -336,6 +336,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261014a"></script>
+<script src="script.js?v=20261014b"></script>
 </body>
 </html>
