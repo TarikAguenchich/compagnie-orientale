@@ -274,3 +274,10 @@ select:disabled{opacity:.75;cursor:not-allowed}
 .frp-tot td{border-top:1px solid var(--line);font-weight:600}
 .frp-sem .row{gap:6px;flex-wrap:nowrap}
 .frp-sem select{min-width:0;max-width:340px}
+
+/* ---------- Livraison groupée / commandes annulées ---------- */
+.livraison{margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:6px;gap:10px;flex-wrap:wrap}
+.livraison.fait{border-style:solid;border-color:var(--warn);background:var(--warn-bg)}
+.livraison.fait input{accent-color:var(--warn)}
+.order.annulee{opacity:.65;border-style:dashed}
+.order.annulee .order-head b,.order.annulee ul{text-decoration:line-through}

@@ -453,6 +453,7 @@ $("saveOrder").onclick = async () => {
 
 /* ---------- Calculs ---------- */
 const totalOrder = o => o.items.reduce((s, x) => s + infos(x).prix * x.qte, 0);
+const actives = orders => orders.filter(o => !o.annuleLe);              // commandes non annulées
 const totalPerm = orders => orders.reduce((s, o) => s + totalOrder(o), 0);
 function agreger(orders) {
   const m = new Map();
@@ -467,26 +468,38 @@ function agreger(orders) {
 
 /* ---------- Rendu (partagé avec l'historique) ---------- */
 function htmlCommandes(orders, actions, permId) {
-  return orders.map((o, i) => `<div class="order${permId ? (o.payeLe ? " payee" : o.livreLe ? " livree" : "") : ""}">
+  return orders.map((o, i) => `<div class="order${permId ? (o.annuleLe ? " annulee" : o.payeLe ? " payee" : o.livreLe ? " livree" : "") : ""}">
     <div class="order-head"><b>${i + 1}. ${esc(o.client)}</b><span class="hint">${esc(o.type)}</span>
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
     <ul>${o.items.map(x => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
-    ${permId ? `<div class="row etats" style="margin-top:8px">
-      <label class="liv" title="${!estAdmin() ? "Coché par un administrateur quand il te remet les items" : o.payeLe ? "Déjà payé : décoche d'abord « Payé »" : "Items remis à l'intendant (entrent dans son stock) : il sera pingé sur Discord"}"><input type="checkbox" data-etat="livre|${esc(permId)}|${esc(o.id)}" ${o.livreLe ? "checked" : ""} ${o.payeLe || !estAdmin() ? "disabled" : ""}> Livré</label>
-      ${o.livreLe ? `<span class="hint">le ${new Date(o.livreLe).toLocaleString("fr-FR")}</span>` : ""}
-      <label class="liv pay" title="${o.livreLe ? "Remis au client et encaissé (sort du stock)" : "Coche d'abord « Livré »"}"><input type="checkbox" data-etat="paye|${esc(permId)}|${esc(o.id)}" ${o.payeLe ? "checked" : ""} ${o.livreLe ? "" : "disabled"}> Payé</label>
-      ${o.payeLe ? `<span class="hint">le ${new Date(o.payeLe).toLocaleString("fr-FR")}</span>` : ""}</div>` : ""}
+    ${permId ? (o.annuleLe
+      ? `<div class="row etats" style="margin-top:8px"><span class="tag err">Annulée</span><span class="hint">le ${new Date(o.annuleLe).toLocaleString("fr-FR")}${o.annulePar ? " par " + esc(o.annulePar) : ""}</span>
+         <button class="btn small" data-ann="0|${esc(permId)}|${esc(o.id)}" style="margin-left:auto">Rétablir</button></div>`
+      : `<div class="row etats" style="margin-top:8px">
+      <span class="hint">${o.livreLe ? "Livré le " + new Date(o.livreLe).toLocaleString("fr-FR") : "Pas encore livré"}</span>
+      <label class="liv pay" title="${o.livreLe ? "Remis au client et encaissé (sort du stock)" : "La permanence doit d'abord être livrée"}"><input type="checkbox" data-etat="paye|${esc(permId)}|${esc(o.id)}" ${o.payeLe ? "checked" : ""} ${o.livreLe ? "" : "disabled"}> Payé</label>
+      ${o.payeLe ? `<span class="hint">le ${new Date(o.payeLe).toLocaleString("fr-FR")}</span>` : `<button class="btn small" data-ann="1|${esc(permId)}|${esc(o.id)}" style="margin-left:auto">Annuler la commande</button>`}</div>`) : ""}
     ${actions ? `<div class="row" style="margin-top:8px"><button class="btn small" data-e="${o.id}">Modifier</button><button class="btn small" data-d="${o.id}">Supprimer</button></div>` : ""}
   </div>`).join("");
 }
-function htmlRecap(orders, coffre) {
+function htmlRecap(orders, coffre, p) {
+  orders = actives(orders);
   const ag = agreger(orders), nb = ag.reduce((s, x) => s + x.qte, 0);
   return `<table><thead><tr><th style="text-align:right">Qté</th><th>Article</th><th>Catégorie</th></tr></thead><tbody>
     ${ag.map(x => `<tr><td class="n">${x.qte}</td><td>${esc(x.nom)}</td><td class="hint">${esc(x.cat)}</td></tr>`).join("")}
     </tbody></table>
     <div class="row" style="margin-top:10px"><span class="hint">${orders.length} client(s) — ${nb} article(s) — coffre : ${esc(coffre)}</span>
-    <span class="total">Encaissé : ${fmt(totalPerm(orders))}</span></div>`;
+    <span class="total">Encaissé : ${fmt(totalPerm(orders))}</span></div>${p ? htmlLivraison(p) : ""}`;
+}
+// Livré : toute la permanence d'un coup (admin) ; les autres voient l'état
+function htmlLivraison(p) {
+  const a = actives(p.orders), livre = a.length > 0 && a.every(o => o.livreLe), quand = livre ? a.map(o => o.livreLe).sort().pop() : null;
+  const paye = a.some(o => o.payeLe);
+  return `<div class="row livraison${livre ? " fait" : ""}">
+    <label class="liv" title="${!estAdmin() ? "Coché par un administrateur quand il dépose tous les items dans le coffre" : livre && paye ? "Des commandes sont déjà payées : décoche d'abord leur « Payé »" : "Tous les items remis dans le coffre : l'intendant est pingé sur Discord"}">
+      <input type="checkbox" data-livre="${esc(p.id)}" ${livre ? "checked" : ""} ${!estAdmin() || (livre && paye) || !a.length ? "disabled" : ""}> Livré${estAdmin() ? " (toute la permanence)" : ""}</label>
+    <span class="hint">${livre ? "le " + new Date(quand).toLocaleString("fr-FR") : estAdmin() ? "Coche quand tu as tout déposé dans le coffre " + esc(p.coffre || "") : "En attente de livraison par l'administration"}</span></div>`;
 }
 
 function render() {
@@ -518,10 +531,10 @@ function recapTexte(p) {
   return `📦 **Commande à l'administration — Permanence ${p.lieu} — ${dateFR(p.date)}** (${p.intendant})
 À déposer dans : **${p.coffre}**
 
-${agreger(p.orders).map(x => `• ${x.qte} × ${x.nom}` + (estAdmin() ? ` — ID : ${x.id || "⚠ manquant"}` : "")).join("\n")}
+${agreger(actives(p.orders)).map(x => `• ${x.qte} × ${x.nom}` + (estAdmin() ? ` — ID : ${x.id || "⚠ manquant"}` : "")).join("\n")}
 
-Clients : ${p.orders.map(o => o.client).join(", ")}
-Encaissé : ${fmt(totalPerm(p.orders))}`;
+Clients : ${actives(p.orders).map(o => o.client).join(", ")}
+Encaissé : ${fmt(totalPerm(actives(p.orders)))}`;
 }
 
 function snapshot() {
@@ -598,7 +611,7 @@ function majFiltres() {
 }
 $("fInt").onchange = $("fLieu").onchange = $("fClient").oninput = $("fItem").oninput = renderHist;
 
-const toutPaye = p => p.orders.length > 0 && p.orders.every(o => o.payeLe);
+const toutPaye = p => p.orders.length > 0 && actives(p.orders).every(o => o.payeLe);
 function renderHist() {
   const enCours = hist.filter(p => !toutPaye(p));
   $("nbEnc").textContent = enCours.length; $("nbEnc").hidden = !enCours.length;
@@ -619,23 +632,26 @@ function renderHist() {
   if (!list.length) { box.innerHTML = '<p class="empty">Aucune permanence ne correspond aux filtres.</p>'; return; }
   const ouverts = new Set([...box.querySelectorAll("details[open]")].map(d => d.dataset.id));
   box.innerHTML = list.map(p => {
-    const nb = p.orders.reduce((s, o) => s + o.items.reduce((t, x) => t + x.qte, 0), 0);
-    const liv = p.orders.filter(o => o.livreLe).length, pay = p.orders.filter(o => o.payeLe).length, n = p.orders.length;
-    const fini = pay === n, etat = fini ? "done" : liv ? "partiel" : "pending";
+    const a = actives(p.orders), nbAnn = p.orders.length - a.length;
+    const nb = a.reduce((s, o) => s + o.items.reduce((t, x) => t + x.qte, 0), 0);
+    const livre = a.length > 0 && a.every(o => o.livreLe), pay = a.filter(o => o.payeLe).length, n = a.length;
+    const fini = pay === n, etat = fini ? "done" : livre ? "partiel" : "pending";
     return `<details class="perm ${etat}" data-id="${esc(p.id)}" ${ouverts.has(p.id) ? "open" : ""}>
-      <summary><b>${esc(p.lieu)} — ${dateFR(p.date)}</b><span class="hint">${esc(p.intendant)} · ${p.orders.length} client(s) · ${nb} article(s)</span>
+      <summary><b>${esc(p.lieu)} — ${dateFR(p.date)}</b><span class="hint">${esc(p.intendant)} · ${n} client(s) · ${nb} article(s)${nbAnn ? ` · ${nbAnn} annulée(s)` : ""}</span>
         ${p.discord ? '<span class="tag ok">Transmise</span>' : '<span class="tag err">Non transmise</span>'}
-        ${fini ? '<span class="tag ok">✔ Tout payé</span>' : `<span class="tag ${liv ? "orange" : ""}">Livré ${liv}/${n}</span><span class="tag ${pay ? "ok" : ""}">Payé ${pay}/${n}</span>`}
-        <span class="total" style="font-size:.9rem">${fmt(totalPerm(p.orders))}</span></summary>
+        ${fini ? '<span class="tag ok">✔ Tout payé</span>' : `<span class="tag ${livre ? "orange" : ""}">${livre ? "Livré" : "À livrer"}</span><span class="tag ${pay ? "ok" : ""}">Payé ${pay}/${n}</span>`}
+        <span class="total" style="font-size:.9rem">${fmt(totalPerm(a))}</span></summary>
       <div class="body">
         <div class="hint">Clôturée le ${new Date(p.clotureLe).toLocaleString("fr-FR")}${p.cloturePar ? " par " + esc(p.cloturePar) : ""}${p.discord && p.envoyeLe ? " — transmise le " + new Date(p.envoyeLe).toLocaleString("fr-FR") : ""}</div>
-        <h3>Commandé à l'administration</h3>${htmlRecap(p.orders, p.coffre)}
+        <h3>Commandé à l'administration</h3>${htmlRecap(p.orders, p.coffre, p)}
         <h3>Commandes détaillées</h3>${htmlCommandes(p.orders, false, p.id)}
         <div class="row" style="margin-top:8px">${p.discord || estSecretaire() ? "" : `<button class="btn small primary" data-hs="${esc(p.id)}">Transmettre aux administrateurs</button>`}<button class="btn small" data-hc="${esc(p.id)}">Copier le récap</button>${estAdmin() ? `<button class="btn small" data-hd="${esc(p.id)}">Supprimer</button>` : ""}</div>
         <div class="msg" id="hm-${esc(p.id)}"></div>
       </div></details>`;
   }).join("");
   box.querySelectorAll("[data-etat]").forEach(c => c.onchange = () => changerEtat(c));
+  box.querySelectorAll("[data-livre]").forEach(c => c.onchange = () => livrerPermanence(c));
+  box.querySelectorAll("[data-ann]").forEach(b => b.onclick = () => annulerCommande(b));
   box.querySelectorAll("[data-hc]").forEach(b => b.onclick = () => copier(recapTexte(hist.find(p => p.id === b.dataset.hc)), $("hm-" + b.dataset.hc)));
   box.querySelectorAll("[data-hs]").forEach(b => b.onclick = async () => {
     const p = hist.find(x => x.id === b.dataset.hs);
@@ -936,6 +952,31 @@ async function changerEtat(c) {
   if (error) { flash(msg, "Non enregistré : " + error.message, false); chargerHist(); }
 }
 
+async function livrerPermanence(c) {
+  const p = hist.find(x => x.id === c.dataset.livre); if (!p) return;
+  const val = c.checked;
+  if (!await confirmer(val ? `Marquer toute la permanence ${p.lieu} du ${dateFR(p.date)} comme livrée ? L'intendant sera pingé sur Discord.` : `Annuler la livraison de la permanence ${p.lieu} du ${dateFR(p.date)} ?`)) { c.checked = !val; return; }
+  c.disabled = true;
+  const { data, error } = await sb.rpc("livrer_permanence", { pid: p.id, livre: val });
+  if (error) { c.checked = !val; c.disabled = false; return flash($("histMsg"), "Non enregistré : " + error.message + (/livrer_permanence/.test(error.message) ? " (as-tu lancé 32_livraison_annulation.sql ?)" : ""), false); }
+  p.orders = data; renderHist(); renderStock();
+  flash($("histMsg"), val ? `Permanence ${p.lieu} du ${dateFR(p.date)} livrée ✔` : "Livraison annulée.", true);
+}
+async function annulerCommande(b) {
+  const [v, pid, oid] = b.dataset.ann.split("|"), annuler = v === "1";
+  const p = hist.find(x => x.id === pid), o = p?.orders.find(x => x.id === oid); if (!o) return;
+  if (!await confirmer(annuler
+    ? `Annuler la commande de ${o.client} (${fmt(totalOrder(o))}) ? Elle sort des totaux, du stock et de la compta${p.discord ? ", et les administrateurs sont prévenus sur Discord" : ""}.`
+    : `Rétablir la commande de ${o.client} ?`)) return;
+  b.disabled = true;
+  const { data, error } = await sb.rpc("annuler_commande", { pid, oid, annuler });
+  if (error) { b.disabled = false; return flash($("histMsg"), "Non enregistré : " + error.message + (/annuler_commande/.test(error.message) ? " (as-tu lancé 32_livraison_annulation.sql ?)" : ""), false); }
+  const avant = toutPaye(p);
+  p.orders = data; renderHist(); renderStock();
+  flash($("histMsg"), (annuler ? `Commande de ${o.client} annulée.` : `Commande de ${o.client} rétablie.`)
+    + (avant !== toutPaye(p) ? (avant ? " La permanence revient dans les commandes en cours." : " Tout le reste est payé : la permanence passe dans l'historique.") : ""), true);
+}
+
 /* ---------- Stock : livré par l'administration, pas encore payé par le client ---------- */
 function renderStock() {
   if ($("viewStock").hidden) return;
@@ -943,7 +984,7 @@ function renderStock() {
   const fc = sansAccent($("sClient").value.trim()), fa = sansAccent($("sItem").value.trim());
   const lignes = [];
   hist.forEach(p => p.orders.forEach(o => {
-    if (!o.livreLe || o.payeLe) return;
+    if (!o.livreLe || o.payeLe || o.annuleLe) return;
     if ((fi && p.intendant !== fi) || (fl && p.lieu !== fl) || (fc && !sansAccent(o.client).includes(fc))) return;
     const items = o.items.filter(x => !fa || sansAccent(lib(x)).includes(fa));
     if (items.length) lignes.push({ p, o, items });
