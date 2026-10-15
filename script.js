@@ -473,7 +473,7 @@ function agreger(orders) {
   const m = new Map();
   orders.forEach(o => o.items.forEach(x => {
     const k = cle(x) + "|" + (x.var || "");
-    if (!m.has(k)) m.set(k, { nom: lib(x), base: cle(x), var: x.var || "", qte: 0, cat: infos(x).cat, id: idOf(x) });
+    if (!m.has(k)) m.set(k, { cle: k, nom: lib(x), base: cle(x), var: x.var || "", qte: 0, cat: infos(x).cat, id: idOf(x) });
     m.get(k).qte += x.qte;
   }));
   const ordre = k => { const i = CATALOGUE.findIndex(a => a.k === k); return i < 0 ? 1e9 : i; };
@@ -504,8 +504,10 @@ function htmlCommandes(orders, actions, permId) {
 function htmlRecap(orders, coffre, p) {
   orders = actives(orders);
   const ag = agreger(orders), nb = ag.reduce((s, x) => s + x.qte, 0);
-  return `<table><thead><tr><th style="text-align:right">Qté</th><th>Article</th><th>Catégorie</th></tr></thead><tbody>
-    ${ag.map(x => `<tr><td class="n">${x.qte}</td><td>${esc(x.nom)}</td><td class="hint">${esc(x.cat)}</td></tr>`).join("")}
+  const retirable = p && orders.some(o => !o.payeLe);
+  return `<table><thead><tr><th style="text-align:right">Qté</th><th>Article</th><th>Catégorie</th>${retirable ? "<th></th>" : ""}</tr></thead><tbody>
+    ${ag.map(x => `<tr><td class="n">${x.qte}</td><td>${esc(x.nom)}</td><td class="hint">${esc(x.cat)}</td>${retirable
+      ? `<td class="del">${orders.some(o => !o.payeLe && o.items.some(it => cle(it) + "|" + (it.var || "") === x.cle)) ? `<button type="button" class="k-ico ret-art" title="Retirer (pas vendu)" data-agg="${esc(p.id)}" data-cle="${esc(x.cle)}">−</button>` : ""}</td>` : ""}</tr>`).join("")}
     </tbody></table>
     <div class="row" style="margin-top:10px"><span class="hint">${orders.length} client(s) — ${nb} article(s) — coffre : ${esc(coffre)}</span>
     <span class="total">Encaissé : ${fmt(totalPerm(orders))}</span></div>${p ? htmlLivraison(p) : ""}`;
@@ -727,6 +729,7 @@ function renderHist() {
   box.querySelectorAll("[data-livre]").forEach(c => c.onchange = () => livrerPermanence(c));
   box.querySelectorAll("[data-ann]").forEach(b => b.onclick = () => annulerCommande(b));
   box.querySelectorAll("[data-ret-art]").forEach(b => b.onclick = () => retirerArticle(b));
+  box.querySelectorAll("[data-agg]").forEach(b => b.onclick = () => panneauRetrait(b));
   box.querySelectorAll("[data-retab]").forEach(b => b.onclick = () => retablirArticle(b));
   box.querySelectorAll("[data-hc]").forEach(b => b.onclick = () => copier(recapTexte(hist.find(p => p.id === b.dataset.hc)), $("hm-" + b.dataset.hc)));
   box.querySelectorAll("[data-hs]").forEach(b => b.onclick = async () => {
@@ -1054,6 +1057,31 @@ async function retirerArticle(b) {
   if (error) { b.disabled = false; return flash($("histMsg"), "Non retiré : " + error.message + (/retirer_article/.test(error.message) ? " (as-tu lancé 37_retirer_article.sql ?)" : ""), false); }
   p.orders = data; renderHist(); renderStock();
   flash($("histMsg"), `${q} × ${lib(x)} retiré(s) de la commande de ${o.client}.`, true);
+}
+// Depuis « Commandé à l'administration » : choisir chez quel(s) client(s) retirer l'article
+function panneauRetrait(b) {
+  const tr = b.closest("tr"), suiv = tr.nextElementSibling;
+  if (suiv?.classList.contains("agg-pan")) { suiv.remove(); return; }
+  tr.parentElement.querySelectorAll(".agg-pan").forEach(x => x.remove());
+  const p = hist.find(x => x.id === b.dataset.agg), cleA = b.dataset.cle;
+  const cand = [];
+  actives(p.orders).filter(o => !o.payeLe).forEach(o => o.items.forEach((it, j) => { if (cle(it) + "|" + (it.var || "") === cleA) cand.push({ o, it, j }); }));
+  if (!cand.length) return;
+  const pan = document.createElement("tr"); pan.className = "agg-pan";
+  pan.innerHTML = `<td colspan="${tr.children.length}"><div class="agg-box"><b>Retirer « ${esc(lib(cand[0].it))} » (pas vendu) :</b>${cand.map((c, n) => `
+    <div class="agg-l"><span>${esc(c.o.client)} <span class="hint">· ${c.it.qte} commandé(s)</span></span>
+      <input type="number" min="1" max="${c.it.qte}" value="${c.it.qte}" data-n="${n}">
+      <button type="button" class="btn small" data-n="${n}">Retirer</button></div>`).join("")}</div></td>`;
+  tr.after(pan);
+  pan.querySelectorAll("button[data-n]").forEach(btn => btn.onclick = async () => {
+    const c = cand[+btn.dataset.n], q = parseInt(pan.querySelector(`input[data-n="${btn.dataset.n}"]`).value, 10);
+    if (!(q >= 1 && q <= c.it.qte)) return flash($("histMsg"), `Quantité invalide : entre 1 et ${c.it.qte}.`, false);
+    btn.disabled = true;
+    const { data, error } = await sb.rpc("retirer_article", { pid: p.id, oid: c.o.id, idx: c.j, qte_: q });
+    if (error) { btn.disabled = false; return flash($("histMsg"), "Non retiré : " + error.message + (/retirer_article/.test(error.message) ? " (as-tu lancé 37_retirer_article.sql ?)" : ""), false); }
+    p.orders = data; renderHist(); renderStock();
+    flash($("histMsg"), `${q} × ${lib(c.it)} retiré(s) de la commande de ${c.o.client}.`, true);
+  });
 }
 async function retablirArticle(b) {
   const [pid, oid, j] = b.dataset.retab.split("|"), p = hist.find(x => x.id === pid), o = p?.orders.find(x => x.id === oid), r = o?.retires?.[+j];

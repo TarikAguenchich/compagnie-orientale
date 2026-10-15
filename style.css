@@ -298,3 +298,7 @@ tr.k-retire .tag{text-decoration:none}
 .mv-ong{width:auto;max-width:220px;padding:3px 6px;font-size:.85rem;margin-left:auto}
 .ret-art{font-weight:700;color:var(--err)}
 .retires{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:.9rem;margin-top:4px;padding:4px 8px;border:1px dashed var(--line);border-radius:4px}
+.agg-pan td{background:var(--soft)}
+.agg-box{display:flex;flex-direction:column;gap:6px;padding:4px 2px}
+.agg-l{display:grid;grid-template-columns:1fr 90px auto;gap:8px;align-items:center}
+.agg-l input{padding:3px 6px}
