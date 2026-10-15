@@ -488,9 +488,9 @@ function htmlCommandes(orders, actions, permId) {
     <div class="order-head"><b>${i + 1}. ${esc(o.client)}</b><span class="hint">${esc(o.type)}</span>
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
     <ul>${o.items.map((x, j) => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}${
-      permId && !o.payeLe && !o.annuleLe ? ` <button type="button" class="k-ico ret-art" title="Retirer cet article (pas vendu)" data-ret-art="${esc(permId)}|${esc(o.id)}|${j}">−</button>` : ""}</li>`; }).join("")}</ul>
-    ${permId && o.retires?.length ? `<div class="retires"><span class="hint">Retiré :</span>${o.retires.map((r, j) => `<span class="retire"><s>${r.qte} × ${esc(lib(r))}</s> <span class="hint">par ${esc(r.retirePar || "?")} le ${new Date(r.retireLe).toLocaleDateString("fr-FR")}</span>${
-      !o.payeLe ? ` <button type="button" class="btn small" data-retab="${esc(permId)}|${esc(o.id)}|${j}">Rétablir</button>` : ""}</span>`).join("")}</div>` : ""}
+      permId && !o.payeLe && !o.annuleLe ? ` <button type="button" class="k-ico ret-art" title="Retirer cet article (pas vendu)" data-ret-art="${esc(permId)}|${esc(o.id)}|${j}">−</button>` : ""}</li>`; }).join("")}${
+      permId ? (o.retires || []).map((r, j) => `<li class="raye"><s>${r.qte} × ${esc(lib(r))}</s> <span class="hint">— retiré (pas vendu) par ${esc(r.retirePar || "?")} le ${new Date(r.retireLe).toLocaleDateString("fr-FR")}</span>${
+        !o.payeLe && !o.annuleLe ? ` <button type="button" class="btn small" data-retab="${esc(permId)}|${esc(o.id)}|${j}">Rétablir</button>` : ""}</li>`).join("") : ""}</ul>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
     ${permId ? (o.annuleLe
       ? `<div class="row etats" style="margin-top:8px"><span class="tag err">Annulée</span><span class="hint">le ${new Date(o.annuleLe).toLocaleString("fr-FR")}${o.annulePar ? " par " + esc(o.annulePar) : ""}</span>
@@ -507,9 +507,12 @@ function htmlRecap(orders, coffre, p) {
   orders = actives(orders);
   const ag = agreger(orders), nb = ag.reduce((s, x) => s + x.qte, 0);
   const retirable = p && orders.some(o => !o.payeLe);
+  const ret = new Map();                                     // articles retirés (pas vendus), barrés
+  if (p) orders.forEach(o => (o.retires || []).forEach(r => { const k = cle(r) + "|" + (r.var || ""); const e = ret.get(k) || { nom: lib(r), cat: infos(r).cat, qte: 0 }; e.qte += r.qte; ret.set(k, e); }));
+  const colVide = retirable ? "<td></td>" : "";
   return `<table><thead><tr><th style="text-align:right">Qté</th><th>Article</th><th>Catégorie</th>${retirable ? "<th></th>" : ""}</tr></thead><tbody>
-    ${ag.map(x => `<tr><td class="n">${x.qte}</td><td>${esc(x.nom)}</td><td class="hint">${esc(x.cat)}</td>${retirable
-      ? `<td class="del">${orders.some(o => !o.payeLe && o.items.some(it => cle(it) + "|" + (it.var || "") === x.cle)) ? `<button type="button" class="k-ico ret-art" title="Retirer (pas vendu)" data-agg="${esc(p.id)}" data-cle="${esc(x.cle)}">−</button>` : ""}</td>` : ""}</tr>`).join("")}
+    ${ag.map(x => `<tr><td class="n">${x.qte}</td><td>${esc(x.nom)}${ret.has(x.cle) ? ` <span class="hint">· <s>${ret.get(x.cle).qte}</s> retiré(s)</span>` : ""}</td><td class="hint">${esc(x.cat)}</td>${retirable
+      ? `<td class="del">${orders.some(o => !o.payeLe && o.items.some(it => cle(it) + "|" + (it.var || "") === x.cle)) ? `<button type="button" class="k-ico ret-art" title="Retirer (pas vendu)" data-agg="${esc(p.id)}" data-cle="${esc(x.cle)}">−</button>` : ""}</td>` : ""}</tr>`).join("")}${[...ret].filter(([k]) => !ag.some(x => x.cle === k)).map(([, e]) => `<tr class="raye"><td class="n"><s>${e.qte}</s></td><td><s>${esc(e.nom)}</s> <span class="hint">retiré (pas vendu)</span></td><td class="hint">${esc(e.cat)}</td>${colVide}</tr>`).join("")}
     </tbody></table>
     <div class="row" style="margin-top:10px"><span class="hint">${orders.length} client(s) — ${nb} article(s) — coffre : ${esc(coffre)}</span>
     <span class="total">Encaissé : ${fmt(totalPerm(orders))}</span></div>${p ? htmlLivraison(p) : ""}`;
