@@ -53,10 +53,19 @@ let REG = { intendants: [], secretaires: [], chatelleries: [], coffres: [] };
 let ZAFF = [];   // intendant / secrétaire de chaque zone (admin)
 try { const r = JSON.parse(localStorage.getItem("reglages_cache")); if (r && Array.isArray(r.intendants)) REG = r; } catch {}
 
-let state = { intendantId: "", lieu: "", coffre: "", date: today(), orders: [], draft: null };
+let state = { intendantId: "", lieu: "", coffre: "", date: today(), orders: [], draft: null, onglets: [], onglet: "Principale" };
 let hist = [];
 try { const s = JSON.parse(localStorage.getItem("perm_state")); if (s && Array.isArray(s.orders)) state = Object.assign(state, s); } catch {}
 const save = () => { try { localStorage.setItem("perm_state", JSON.stringify(state)); } catch {} };
+/* ---------- Onglets de la permanence (ex. « Urgent Faillaise ») : on n'envoie que l'onglet affiché ---------- */
+const PRINCIPAL = "Principale";
+let ONGLETS_Z = [];                                         // zone : onglets créés (table brouillon_onglets)
+const ongletDe = o => o.onglet || PRINCIPAL;
+const ordresOnglet = () => state.orders.filter(o => ongletDe(o) === state.onglet);
+function listeOnglets() {
+  const l = [PRINCIPAL, ...(estZone() ? ONGLETS_Z : state.onglets || []), ...state.orders.map(ongletDe)];
+  return [...new Set(l)];
+}
 let editId = state.draft?.editId || null;
 let restoring = false;
 
@@ -121,6 +130,7 @@ function ecouter() { sb.channel("maj")
   .on("postgres_changes", { event: "*", schema: "public", table: "profils" }, () => { if (estAdmin()) chargerComptes(); })
   .on("postgres_changes", { event: "*", schema: "public", table: "brouillon_commandes" }, majZone)
   .on("postgres_changes", { event: "*", schema: "public", table: "brouillons" }, majZone)
+  .on("postgres_changes", { event: "*", schema: "public", table: "brouillon_onglets" }, majZone)
   .subscribe(); }
 // Filet de sécurité : rechargement quand on revient sur l'onglet
 document.addEventListener("visibilitychange", () => { if (!document.hidden && ROLE) { chargerZone(); if (!$("viewCtr").hidden) chargerSuivi(); if (!$("viewFrp").hidden) chargerFrappes(); if (!$("viewCpt").hidden) chargerCompta(); chargerCatalogue(); chargerHist(); chargerReglages(); if (estAdmin()) chargerComptes(); } });
@@ -223,20 +233,23 @@ const majZone = () => { clearTimeout(tZone); tZone = setTimeout(chargerZone, 250
 async function chargerZone() {
   if (!estZone() || ZONE == null) return;
   const z = ZONE;
-  const [c, b] = await Promise.all([
-    sb.from("brouillon_commandes").select("id, commande, cree_le").eq("zone_id", z).order("cree_le"),
+  const [c, b, og] = await Promise.all([
+    sb.from("brouillon_commandes").select("id, commande, cree_le, onglet").eq("zone_id", z).order("cree_le"),
     sb.from("brouillons").select("date").eq("zone_id", z).maybeSingle(),
+    sb.from("brouillon_onglets").select("nom").eq("zone_id", z).order("cree_le"),
   ]);
   if (z !== ZONE) return;
   if (c.error) return flash($("sendMsg"), "Permanence partagée indisponible : " + c.error.message + " (as-tu lancé 19_secretaires.sql ?)", false);
-  state.orders = c.data.map(r => r.commande);
+  state.orders = c.data.map(r => ({ ...r.commande, onglet: r.onglet || PRINCIPAL }));
+  ONGLETS_Z = og.error ? [] : og.data.map(x => x.nom);
+  if (!listeOnglets().includes(state.onglet)) state.onglet = PRINCIPAL;
   if (b.data?.date) { state.date = b.data.date; $("date").value = state.date; }
   if (editId && !state.orders.some(o => o.id === editId)) resetForm();     // supprimée par l'autre personne
   save(); render();
 }
 $("zone").onchange = () => {
   ZONE = Number($("zone").value); try { localStorage.setItem("zone", ZONE); } catch {}
-  state.orders = []; resetForm(); majPermanence(); chargerZone();
+  state.orders = []; ONGLETS_Z = []; state.onglet = PRINCIPAL; resetForm(); majPermanence(); chargerZone();
 };
 $("date").value = state.date || today();
 $("intendant").onchange = () => { state.intendantId = $("intendant").value; majPermanence(); };
@@ -435,14 +448,15 @@ $("saveOrder").onclick = async () => {
   if (sansVar) return flash($("formMsg"), `Choisis la variante pour « ${sansVar.nom} ».`, false);
   const fig = items.map(x => { const a = ITEM[x.k]; return Object.assign(x, { nom: a.nom, prix: a.prix, fourni: a.fourni || "", cat: a.cat }); });
   const o = { id: editId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5), client, type: $("clientType").value, notes: $("notes").value.trim(), items: fig };
-  const edit = !!editId;
+  const edit = !!editId, ong = edit ? ongletDe(state.orders.find(x => x.id === editId) || {}) : state.onglet;
   if (estZone()) {
     if (ZONE == null) return flash($("formMsg"), "Aucune zone sur ton compte.", false);
     const maj = { commande: o, maj_le: new Date().toISOString(), maj_par: PROFIL?.nom || null };
     const { error } = edit ? await sb.from("brouillon_commandes").update(maj).eq("id", o.id)
-                           : await sb.from("brouillon_commandes").insert({ id: o.id, zone_id: ZONE, ...maj });
+                           : await sb.from("brouillon_commandes").insert({ id: o.id, zone_id: ZONE, onglet: ong, ...maj });
     if (error) return flash($("formMsg"), "Commande non enregistrée : " + error.message, false);
   }
+  o.onglet = ong;
   if (edit) state.orders = state.orders.map(x => x.id === editId ? o : x);
   else state.orders.push(o);
   save();
@@ -480,7 +494,8 @@ function htmlCommandes(orders, actions, permId) {
       <span class="hint">${o.livreLe ? "Livré le " + new Date(o.livreLe).toLocaleString("fr-FR") : "Pas encore livré"}</span>
       <label class="liv pay" title="${o.livreLe ? "Remis au client et encaissé (sort du stock)" : "La permanence doit d'abord être livrée"}"><input type="checkbox" data-etat="paye|${esc(permId)}|${esc(o.id)}" ${o.payeLe ? "checked" : ""} ${o.livreLe ? "" : "disabled"}> Payé</label>
       ${o.payeLe ? `<span class="hint">le ${new Date(o.payeLe).toLocaleString("fr-FR")}</span>` : `<button class="btn small" data-ann="1|${esc(permId)}|${esc(o.id)}" style="margin-left:auto">Annuler la commande</button>`}</div>`) : ""}
-    ${actions ? `<div class="row" style="margin-top:8px"><button class="btn small" data-e="${o.id}">Modifier</button><button class="btn small" data-d="${o.id}">Supprimer</button></div>` : ""}
+    ${actions ? `<div class="row" style="margin-top:8px"><button class="btn small" data-e="${o.id}">Modifier</button><button class="btn small" data-d="${o.id}">Supprimer</button>${listeOnglets().length > 1
+      ? `<select class="mv-ong" data-mv="${o.id}"><option value="">Déplacer vers…</option>${listeOnglets().filter(n => n !== ongletDe(o)).map(n => `<option>${esc(n)}</option>`).join("")}</select>` : ""}</div>` : ""}
   </div>`).join("");
 }
 function htmlRecap(orders, coffre, p) {
@@ -503,9 +518,12 @@ function htmlLivraison(p) {
 }
 
 function render() {
-  $("nbOrders").textContent = state.orders.length;
+  renderOnglets();
+  const liste = ordresOnglet();
+  $("nbOrders").textContent = liste.length;
+  $("ongletNom").textContent = listeOnglets().length > 1 ? "— " + state.onglet : "";
   const box = $("orders");
-  box.innerHTML = state.orders.length ? htmlCommandes(state.orders, true) : '<p class="empty">Aucune commande enregistrée pour l\'instant.</p>';
+  box.innerHTML = liste.length ? htmlCommandes(liste, true) : '<p class="empty">Aucune commande dans cet onglet pour l\'instant.</p>';
   box.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
     const o = state.orders.find(x => x.id === b.dataset.d);
     if (!await confirmer(`Supprimer la commande de ${o.client} ?`)) return;
@@ -523,7 +541,53 @@ function render() {
     chargerForm({ client: o.client, type: o.type, notes: o.notes, lines: o.items });
     $("formCard").scrollIntoView({ behavior: "smooth" });
   });
-  $("recap").innerHTML = state.orders.length ? htmlRecap(state.orders, state.coffre || "—") : '<p class="empty">Le récapitulatif apparaîtra ici.</p>';
+  box.querySelectorAll("[data-mv]").forEach(sel => sel.onchange = () => deplacerCommande(sel.dataset.mv, sel.value));
+  $("recap").innerHTML = liste.length ? htmlRecap(liste, state.coffre || "—") : '<p class="empty">Le récapitulatif apparaîtra ici.</p>';
+}
+function renderOnglets() {
+  const l = listeOnglets(), nb = n => state.orders.filter(o => ongletDe(o) === n).length;
+  $("permOnglets").innerHTML = l.map(n => `<button type="button" class="ong${n === state.onglet ? " on" : ""}" data-ong="${esc(n)}">${esc(n)} <span class="badge">${nb(n)}</span></button>`).join("")
+    + `<button type="button" class="ong ong-add" id="ongAdd" title="Créer un onglet (ex. commande urgente d'une châtellerie)">+ Onglet</button>`
+    + (state.onglet !== PRINCIPAL ? `<button type="button" class="ong ong-del" id="ongDel" title="Supprimer cet onglet (ses commandes reviennent dans « ${PRINCIPAL} »)">Supprimer l'onglet</button>` : "");
+  $("permOnglets").querySelectorAll("[data-ong]").forEach(b => b.onclick = () => {
+    if (b.dataset.ong === state.onglet) return;
+    state.onglet = b.dataset.ong; save(); if (editId) resetForm(); render();
+  });
+  $("ongAdd").onclick = creerOnglet;
+  if ($("ongDel")) $("ongDel").onclick = supprimerOnglet;
+}
+async function creerOnglet() {
+  const nom = (prompt("Nom du nouvel onglet (ex. Urgent Faillaise) :") || "").trim().slice(0, 40);
+  if (!nom) return;
+  if (listeOnglets().some(n => n.toLowerCase() === nom.toLowerCase())) return flash($("sendMsg"), `L'onglet « ${nom} » existe déjà.`, false);
+  if (estZone()) {
+    const { error } = await sb.from("brouillon_onglets").insert({ zone_id: ZONE, nom });
+    if (error) return flash($("sendMsg"), "Onglet non créé : " + error.message + (/brouillon_onglets/.test(error.message) ? " (as-tu lancé 36_onglets_permanence.sql ?)" : ""), false);
+    ONGLETS_Z.push(nom);
+  } else state.onglets = [...(state.onglets || []), nom];
+  state.onglet = nom; save(); if (editId) resetForm(); render();
+}
+async function supprimerOnglet() {
+  const nom = state.onglet, n = ordresOnglet().length;
+  if (nom === PRINCIPAL) return;
+  if (!await confirmer(`Supprimer l'onglet « ${nom} » ?${n ? ` Ses ${n} commande(s) reviennent dans « ${PRINCIPAL} ».` : ""}`)) return;
+  if (estZone()) {
+    if (n) { const { error } = await sb.from("brouillon_commandes").update({ onglet: PRINCIPAL }).eq("zone_id", ZONE).eq("onglet", nom); if (error) return flash($("sendMsg"), "Impossible : " + error.message, false); }
+    const { error } = await sb.from("brouillon_onglets").delete().eq("zone_id", ZONE).eq("nom", nom);
+    if (error) return flash($("sendMsg"), "Impossible : " + error.message, false);
+    ONGLETS_Z = ONGLETS_Z.filter(x => x !== nom);
+  } else state.onglets = (state.onglets || []).filter(x => x !== nom);
+  state.orders.forEach(o => { if (ongletDe(o) === nom) o.onglet = PRINCIPAL; });
+  state.onglet = PRINCIPAL; save(); render();
+}
+async function deplacerCommande(id, vers) {
+  const o = state.orders.find(x => x.id === id); if (!o || !vers) return;
+  if (estZone()) {
+    const { error } = await sb.from("brouillon_commandes").update({ onglet: vers }).eq("id", id);
+    if (error) { render(); return flash($("sendMsg"), "Déplacement impossible : " + error.message, false); }
+  }
+  o.onglet = vers; if (editId === id) resetForm(); save(); render();
+  flash($("sendMsg"), `Commande de ${o.client} déplacée dans « ${vers} ».`, true);
 }
 
 /* ---------- Transmission (la base poste le message Discord) ---------- */
@@ -539,23 +603,27 @@ Encaissé : ${fmt(totalPerm(actives(p.orders)))}`;
 
 function snapshot() {
   return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), intendant: estZone() ? $("intendant").selectedOptions[0]?.text || "" : intendantCourant()?.nom || "", coffre: state.coffre, lieu: state.lieu, date: state.date,
-           orders: JSON.parse(JSON.stringify(state.orders)), clotureLe: new Date().toISOString(), discord: false };
+           orders: JSON.parse(JSON.stringify(ordresOnglet().map(({ onglet, ...o }) => o))), clotureLe: new Date().toISOString(), discord: false };
 }
 // Les ID de give ne partent jamais du navigateur : la base les retrouve dans le catalogue
 const sansIds = orders => orders.map(o => Object.assign({}, o, { items: o.items.map(({ id, ...x }) => x) }));
 
 $("send").onclick = async () => {
-  if (!state.orders.length) return flash($("sendMsg"), "Aucune commande dans cette permanence.", false);
+  const nOng = ordresOnglet().length, dansOng = listeOnglets().length > 1 ? ` de l'onglet « ${state.onglet} »` : "";
+  if (!nOng) return flash($("sendMsg"), "Aucune commande dans cet onglet.", false);
   if (!state.date) return flash($("sendMsg"), "Renseigne la date.", false);
   if (estSecretaire()) return;
   if (estZone()) {
     if (!state.lieu || !state.coffre) return flash($("sendMsg"), `La châtellerie ou le coffre de la zone ${ZONE} n'est pas réglé : demande à un administrateur (Réglages).`, false);
-    if (!await confirmer(`Clôturer la permanence de la zone ${ZONE} (${state.orders.length} client(s)) et commander aux administrateurs impériaux ?`)) return;
+    if (!await confirmer(`Commander aux administrateurs impériaux les ${nOng} commande(s)${dansOng} (zone ${ZONE}) ?${dansOng ? " Les autres onglets restent dans la permanence." : ""}`)) return;
     $("send").disabled = true;
-    const { data, error } = await sb.rpc("cloturer_zone", { zone: ZONE, date_: state.date });
+    const envoye = state.onglet;
+    const { data, error } = await sb.rpc("cloturer_zone", { zone: ZONE, date_: state.date, onglet_: envoye });
     $("send").disabled = false;
     if (error) return flash($("sendMsg"), "Impossible de clôturer (" + error.message + "). Rien n'a été envoyé ni effacé, réessaie.", false);
-    editId = null; state.draft = null; resetForm(); await chargerZone(); chargerHist();
+    editId = null; state.draft = null; resetForm();
+    if (envoye !== PRINCIPAL) { ONGLETS_Z = ONGLETS_Z.filter(x => x !== envoye); state.onglet = PRINCIPAL; }
+    await chargerZone(); chargerHist();
     if (data.discord) flash($("sendMsg"), "Commande transmise aux administrateurs impériaux ✔ Elle est maintenant dans « Commandes en cours ».", true);
     else flash($("sendMsg"), `Permanence clôturée et archivée, mais pas transmise sur Discord (${data.erreur}). Tu pourras la renvoyer depuis l'onglet Commandes en cours.`, false);
     return;
@@ -563,7 +631,7 @@ $("send").onclick = async () => {
   if (!intendantCourant()) return flash($("sendMsg"), "Choisis l'intendant (à créer dans Réglages s'il n'existe pas).", false);
   if (!state.lieu) return flash($("sendMsg"), "Choisis la châtellerie (à créer dans Réglages).", false);
   if (!state.coffre) return flash($("sendMsg"), "Choisis le coffre (à créer dans Réglages).", false);
-  if (!await confirmer(`Clôturer la permanence (${state.orders.length} client(s)) et commander aux administrateurs impériaux ?`)) return;
+  if (!await confirmer(`Commander aux administrateurs impériaux les ${nOng} commande(s)${dansOng} ?`)) return;
 
   const p = snapshot();
   $("send").disabled = true;
@@ -571,8 +639,10 @@ $("send").onclick = async () => {
   $("send").disabled = false;
   if (error) return flash($("sendMsg"), "Impossible de clôturer (" + error.message + "). Rien n'a été envoyé ni effacé, réessaie.", false);
   // archivée : on vide la permanence
-  state.orders = []; editId = null; state.draft = null; save();
-  resetForm(); render(); chargerHist();
+  const envoye = state.onglet;
+  state.orders = state.orders.filter(o => ongletDe(o) !== envoye); editId = null; state.draft = null;
+  if (envoye !== PRINCIPAL) { state.onglets = (state.onglets || []).filter(x => x !== envoye); state.onglet = PRINCIPAL; }
+  save(); resetForm(); render(); chargerHist();
   if (data.discord) flash($("sendMsg"), "Commande transmise aux administrateurs impériaux ✔ Elle est maintenant dans « Commandes en cours ».", true);
   else flash($("sendMsg"), `Permanence clôturée et archivée, mais pas transmise sur Discord (${data.erreur}). Tu pourras la renvoyer depuis l'onglet Commandes en cours.`, false);
 };
@@ -582,18 +652,19 @@ async function copier(txt, el) {
   catch { flash(el, "Copie impossible sur ce navigateur.", false); }
 }
 $("copy").onclick = () => {
-  if (!state.orders.length) return flash($("sendMsg"), "Aucune commande dans cette permanence.", false);
+  if (!ordresOnglet().length) return flash($("sendMsg"), "Aucune commande dans cet onglet.", false);
   copier(recapTexte(snapshot()), $("sendMsg"));
 };
 
 $("reset").onclick = async () => {
-  if (!state.orders.length && !$("client").value && !lignesForm().length) return;
-  if (!await confirmer(estZone() ? `Effacer toutes les commandes de la permanence de la zone ${ZONE} (pour toi et ta zone) sans rien envoyer ?` : "Effacer toutes les commandes de cette permanence sans rien envoyer ?")) return;
-  if (estZone() && state.orders.length) {
-    const { error } = await sb.from("brouillon_commandes").delete().eq("zone_id", ZONE);
+  const n = ordresOnglet().length, ong = state.onglet;
+  if (!n && !$("client").value && !lignesForm().length) return;
+  if (!await confirmer(`Effacer les ${n} commande(s) de l'onglet « ${ong} »${estZone() ? ` (pour toi et ta zone ${ZONE})` : ""} sans rien envoyer ?`)) return;
+  if (estZone() && n) {
+    const { error } = await sb.from("brouillon_commandes").delete().eq("zone_id", ZONE).eq("onglet", ong);
     if (error) return flash($("sendMsg"), "Impossible de vider : " + error.message, false);
   }
-  state.orders = []; state.draft = null; editId = null; save(); resetForm(); render();
+  state.orders = state.orders.filter(o => ongletDe(o) !== ong); state.draft = null; editId = null; save(); resetForm(); render();
 };
 
 /* ---------- Historique (Supabase) ---------- */

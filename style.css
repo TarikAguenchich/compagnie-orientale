@@ -287,3 +287,12 @@ select:disabled{opacity:.75;cursor:not-allowed}
 tr.k-retire td{opacity:.6}
 tr.k-retire td:nth-last-child(n+2){text-decoration:line-through}
 tr.k-retire .tag{text-decoration:none}
+
+/* ---------- Onglets de la permanence ---------- */
+.perm-onglets{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.ong{font-family:Cinzel,serif;font-weight:700;font-size:.82rem;border:1px solid var(--line);background:var(--paper);color:var(--muted);border-radius:6px 6px 0 0;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.ong.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ong.on .badge{background:var(--accent-ink);color:var(--accent)}
+.ong-add{border-style:dashed;color:var(--accent)}
+.ong-del{margin-left:auto;border-color:var(--err);color:var(--err);border-radius:6px}
+.mv-ong{width:auto;max-width:220px;padding:3px 6px;font-size:.85rem;margin-left:auto}
