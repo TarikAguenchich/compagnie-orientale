@@ -74,6 +74,7 @@ let ROLE = null, PROFIL = null;
 const estAdmin = () => ROLE === "admin";
 const estSecretaire = () => ROLE === "secretaire";
 const estZone = () => ROLE === "intendant" || ROLE === "secretaire";   // permanence partagée de la zone
+const estFrappeur = () => estAdmin() || (ROLE === "intendant" && (PROFIL?.zones || []).map(Number).includes(1));   // frappe : admin + intendant zone 1
 let ZONE = null;
 
 /* ---------- Chargement depuis Supabase ---------- */
@@ -149,6 +150,7 @@ function confirmer(txt) {
 let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
   if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr" || t === "cpt")) t = "perm";
+  if (t === "frp" && !estFrappeur()) t = "perm";
   const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", frp: "viewFrp", ctr: "viewCtr", cpt: "viewCpt", cat: "viewCat", reg: "viewReg" };
   ["viewPerm", "viewHist", "viewStock", "viewFrp", "viewCtr", "viewCpt", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
   if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); }
@@ -1574,6 +1576,7 @@ function demarrer() {
   $("secHint").hidden = !estSecretaire();
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
   $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = $("tabCpt").hidden = !estAdmin();
+  $("tabFrp").hidden = !estFrappeur();
   $("sIntWrap").hidden = !estAdmin();
   $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
   if (demarre) return; demarre = true;
@@ -1885,7 +1888,7 @@ function renderFrappes() {
         <div class="row"><button type="button" class="btn ${d ? "" : "primary"} small frp-go">${d ? "Corriger" : "Déclarer la frappe"}</button>
         ${d ? `<button type="button" class="btn small frp-del" data-id="${d.id}">Annuler</button>` : ""}</div></div>` : ""}
     </div>`;
-  }).join("")}</div>` : '<p class="empty">Aucune châtellerie : tu n\'es affecté(e) à aucune zone.</p>';
+  }).join("")}</div>` : '<p class="empty">La frappe est gérée par l\'intendant de la zone 1 et les administrateurs.</p>';
   $("frpListe").querySelectorAll(".frp-carte").forEach(card => {
     const sel = card.querySelector(".frp-s"); if (!sel) return;
     sel.onchange = () => { const l = lingotsFrappe(Number(sel.value)); card.querySelector(".frp-or").textContent = l.or; card.querySelector(".frp-arg").textContent = l.arg; };
