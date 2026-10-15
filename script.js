@@ -485,7 +485,10 @@ function htmlCommandes(orders, actions, permId) {
   return orders.map((o, i) => `<div class="order${permId ? (o.annuleLe ? " annulee" : o.payeLe ? " payee" : o.livreLe ? " livree" : "") : ""}">
     <div class="order-head"><b>${i + 1}. ${esc(o.client)}</b><span class="hint">${esc(o.type)}</span>
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
-    <ul>${o.items.map(x => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}</li>`; }).join("")}</ul>
+    <ul>${o.items.map((x, j) => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}${
+      permId && !o.payeLe && !o.annuleLe ? ` <button type="button" class="k-ico ret-art" title="Retirer cet article (pas vendu)" data-ret-art="${esc(permId)}|${esc(o.id)}|${j}">−</button>` : ""}</li>`; }).join("")}</ul>
+    ${permId && o.retires?.length ? `<div class="retires"><span class="hint">Retiré :</span>${o.retires.map((r, j) => `<span class="retire"><s>${r.qte} × ${esc(lib(r))}</s> <span class="hint">par ${esc(r.retirePar || "?")} le ${new Date(r.retireLe).toLocaleDateString("fr-FR")}</span>${
+      !o.payeLe ? ` <button type="button" class="btn small" data-retab="${esc(permId)}|${esc(o.id)}|${j}">Rétablir</button>` : ""}</span>`).join("")}</div>` : ""}
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
     ${permId ? (o.annuleLe
       ? `<div class="row etats" style="margin-top:8px"><span class="tag err">Annulée</span><span class="hint">le ${new Date(o.annuleLe).toLocaleString("fr-FR")}${o.annulePar ? " par " + esc(o.annulePar) : ""}</span>
@@ -723,6 +726,8 @@ function renderHist() {
   box.querySelectorAll("[data-etat]").forEach(c => c.onchange = () => changerEtat(c));
   box.querySelectorAll("[data-livre]").forEach(c => c.onchange = () => livrerPermanence(c));
   box.querySelectorAll("[data-ann]").forEach(b => b.onclick = () => annulerCommande(b));
+  box.querySelectorAll("[data-ret-art]").forEach(b => b.onclick = () => retirerArticle(b));
+  box.querySelectorAll("[data-retab]").forEach(b => b.onclick = () => retablirArticle(b));
   box.querySelectorAll("[data-hc]").forEach(b => b.onclick = () => copier(recapTexte(hist.find(p => p.id === b.dataset.hc)), $("hm-" + b.dataset.hc)));
   box.querySelectorAll("[data-hs]").forEach(b => b.onclick = async () => {
     const p = hist.find(x => x.id === b.dataset.hs);
@@ -1032,6 +1037,32 @@ async function livrerPermanence(c) {
   if (error) { c.checked = !val; c.disabled = false; return flash($("histMsg"), "Non enregistré : " + error.message + (/livrer_permanence/.test(error.message) ? " (as-tu lancé 32_livraison_annulation.sql ?)" : ""), false); }
   p.orders = data; renderHist(); renderStock();
   flash($("histMsg"), val ? `Permanence ${p.lieu} du ${dateFR(p.date)} livrée ✔` : "Livraison annulée.", true);
+}
+// Retirer un article pas vendu (ou une partie de la quantité) : total, stock et compta suivent
+async function retirerArticle(b) {
+  const [pid, oid, j] = b.dataset.retArt.split("|"), p = hist.find(x => x.id === pid), o = p?.orders.find(x => x.id === oid), x = o?.items[+j];
+  if (!x) return;
+  let q = x.qte;
+  if (x.qte > 1) {
+    const r = prompt(`Combien de « ${lib(x)} » retirer de la commande de ${o.client} ? (1 à ${x.qte})`, String(x.qte));
+    if (r === null) return;
+    q = parseInt(r, 10);
+    if (!(q >= 1 && q <= x.qte)) return flash($("histMsg"), `Quantité invalide : entre 1 et ${x.qte}.`, false);
+  } else if (!await confirmer(`Retirer « ${lib(x)} » de la commande de ${o.client} ?`)) return;
+  b.disabled = true;
+  const { data, error } = await sb.rpc("retirer_article", { pid, oid, idx: +j, qte_: q });
+  if (error) { b.disabled = false; return flash($("histMsg"), "Non retiré : " + error.message + (/retirer_article/.test(error.message) ? " (as-tu lancé 37_retirer_article.sql ?)" : ""), false); }
+  p.orders = data; renderHist(); renderStock();
+  flash($("histMsg"), `${q} × ${lib(x)} retiré(s) de la commande de ${o.client}.`, true);
+}
+async function retablirArticle(b) {
+  const [pid, oid, j] = b.dataset.retab.split("|"), p = hist.find(x => x.id === pid), o = p?.orders.find(x => x.id === oid), r = o?.retires?.[+j];
+  if (!r) return;
+  b.disabled = true;
+  const { data, error } = await sb.rpc("retablir_article", { pid, oid, ridx: +j });
+  if (error) { b.disabled = false; return flash($("histMsg"), "Non rétabli : " + error.message, false); }
+  p.orders = data; renderHist(); renderStock();
+  flash($("histMsg"), `${r.qte} × ${lib(r)} remis dans la commande de ${o.client}.`, true);
 }
 async function annulerCommande(b) {
   const [v, pid, oid] = b.dataset.ann.split("|"), annuler = v === "1";
