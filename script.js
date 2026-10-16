@@ -2067,7 +2067,8 @@ function renderGere() {
   $("gereDen").innerHTML = `<div class="k-table"><table class="k-jr gere"><thead><tr><th>Denrée</th><th>Catégorie</th><th></th></tr></thead><tbody>${
     liste.map(d => `<tr class="${d.actif ? "" : "k-retire"}"><td><input value="${esc(d.nom)}" data-den-nom="${esc(d.cle)}"></td>
       <td><select data-den-cat="${esc(d.cle)}">${optsCat(d.catId)}</select></td>
-      <td class="r">${d.actif ? `<button type="button" class="btn small" data-den-off="${esc(d.cle)}">Retirer</button>` : `<button type="button" class="btn small" data-den-on="${esc(d.cle)}">Remettre</button>`}</td></tr>`).join("")}</tbody></table></div>`;
+      <td class="r gere-act">${d.actif ? `<button type="button" class="btn small" data-den-off="${esc(d.cle)}">Retirer</button>` : `<button type="button" class="btn small" data-den-on="${esc(d.cle)}">Remettre</button>`}
+        <button type="button" class="x" title="Supprimer complètement (et ses prix)" data-den-sup="${esc(d.cle)}">×</button></td></tr>`).join("")}</tbody></table></div>`;
   const den = k => AUD.toutes.find(d => d.cle === k);
   const majDen = async (k, champs, msg) => { const d = den(k);
     const { error } = await sb.rpc("modifier_denree", { cle_: k, nom_: champs.nom ?? d.nom, categorie: champs.cat !== undefined ? champs.cat : d.catId, actif_: champs.actif ?? d.actif });
@@ -2076,6 +2077,13 @@ function renderGere() {
   $("gereDen").querySelectorAll("[data-den-cat]").forEach(s => s.onchange = () => majDen(s.dataset.denCat, { cat: Number(s.value) }, `« ${den(s.dataset.denCat).nom} » → ${s.selectedOptions[0].text}.`));
   $("gereDen").querySelectorAll("[data-den-off]").forEach(b => b.onclick = async () => { if (await confirmer(`Retirer « ${den(b.dataset.denOff).nom} » des relevés ? (les prix déjà saisis sont gardés)`)) majDen(b.dataset.denOff, { actif: false }, "Denrée retirée."); });
   $("gereDen").querySelectorAll("[data-den-on]").forEach(b => b.onclick = () => majDen(b.dataset.denOn, { actif: true }, "Denrée remise."));
+  $("gereDen").querySelectorAll("[data-den-sup]").forEach(b => b.onclick = async () => {
+    const d = den(b.dataset.denSup);
+    if (!await confirmer(`Supprimer complètement « ${d.nom} » et tous ses prix ? C'est définitif.`)) return;
+    const { error } = await sb.rpc("supprimer_denree", { cle_: d.cle });
+    if (error) return flash($("gereMsg"), error.message + (/supprimer_denree/.test(error.message) ? " (as-tu lancé 42_supprimer_denree.sql ?)" : ""), false);
+    rechargerAudit(`« ${d.nom} » supprimée.`);
+  });
   const majCat = async (id, nom, ordre, msg) => { const { error } = await sb.rpc("enregistrer_categorie", { id_: id, nom_: nom, ordre_: ordre }); if (error) return erreurGere(error); rechargerAudit(msg); };
   $("gereCats").querySelectorAll("[data-cat-nom]").forEach(i => i.onchange = () => { const c = AUD.cats.find(x => String(x.id) === i.dataset.catNom); if (i.value.trim()) majCat(c.id, i.value.trim(), c.ordre, "Catégorie renommée."); });
   $("gereCats").querySelectorAll("[data-cat-ordre]").forEach(i => i.onchange = () => { const c = AUD.cats.find(x => String(x.id) === i.dataset.catOrdre); majCat(c.id, c.nom, Number(i.value) || 0, "Ordre enregistré."); });
