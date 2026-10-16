@@ -151,13 +151,14 @@ let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" 
 function showTab(t) {
   if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr" || t === "cpt")) t = "perm";
   if (t === "frp" && !estFrappeur()) t = "perm";
-  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", frp: "viewFrp", ctr: "viewCtr", cpt: "viewCpt", cat: "viewCat", reg: "viewReg" };
-  ["viewPerm", "viewHist", "viewStock", "viewFrp", "viewCtr", "viewCpt", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
-  if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); }
+  const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", frp: "viewFrp", aud: "viewAud", ctr: "viewCtr", cpt: "viewCpt", cat: "viewCat", reg: "viewReg" };
+  ["viewPerm", "viewHist", "viewStock", "viewFrp", "viewAud", "viewCtr", "viewCpt", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
+  if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); chargerAudit(); }
   if (t === "stock") renderStock();
   if (t === "cpt") chargerCompta();
   if (t === "frp") chargerFrappes();
-  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["frp", "tabFrp"], ["ctr", "tabCtr"], ["cpt", "tabCpt"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
+  if (t === "aud") ouvrirAudit();
+  [["perm", "tabPerm"], ["enc", "tabEnc"], ["hist", "tabHist"], ["stock", "tabStock"], ["frp", "tabFrp"], ["aud", "tabAud"], ["ctr", "tabCtr"], ["cpt", "tabCpt"], ["cat", "tabCat"], ["reg", "tabReg"]].forEach(([k, b]) => $(b).classList.toggle("on", t === k));
   if (t === "enc" || t === "hist") { if (MODE !== t) $("hist").innerHTML = ""; MODE = t; $("histMsg").className = "msg"; renderHist(); }
   if (t === "cat") renderCat();
   if (t === "reg") renderReg();
@@ -170,6 +171,7 @@ $("tabStock").onclick = () => showTab("stock");
 $("tabCtr").onclick = () => showTab("ctr");
 $("tabCpt").onclick = () => showTab("cpt");
 $("tabFrp").onclick = () => showTab("frp");
+$("tabAud").onclick = () => showTab("aud");
 $("tabCat").onclick = () => showTab("cat");
 $("tabReg").onclick = () => showTab("reg");
 
@@ -1185,17 +1187,27 @@ async function majLieuxContrats() {
   if (prete) sel.value = prete.ville;
 }
 function genererContrats() {
-  // une compagnie différente par contrat, tirée au hasard
-  const melange = COMPAGNIES.filter(c => c.actif);
+  // une compagnie différente par contrat, tirée au hasard ; seulement les contrats rentables pour la ville (audit des prix)
+  const melange = COMPAGNIES.filter(c => c.actif), ville = $("ctrLieu").value;
   if (melange.length < TIRAGE.length) { flash($("ctrMsg"), `Il faut au moins ${TIRAGE.length} compagnies actives (Réglages) : il y en a ${melange.length}.`, false); return false; }
-  for (let i = melange.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [melange[i], melange[j]] = [melange[j], melange[i]]; }
-  tirage = { lieu: $("ctrLieu").value, contrats: TIRAGE.map((taille, i) => {
-    const c = melange[i % melange.length];
-    return { slug: c.slug, taille, nom: c.nom, prix: c.contrats[taille].prix, lignes: c.contrats[taille].lignes };
-  }) };
+  let choix;
+  if ($("ctrForcer").checked) {
+    for (let i = melange.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [melange[i], melange[j]] = [melange[j], melange[i]]; }
+    choix = TIRAGE.map((t, i) => ({ c: melange[i], t }));
+  } else {
+    if (!AUD) { flash($("ctrMsg"), "Prix de l'audit pas encore chargés : réessaie dans un instant (ou coche « Ignorer la rentabilité »).", false); chargerAudit(); return false; }
+    choix = tirageRentable(ville);
+    if (!choix) {
+      const n = t => melange.filter(c => renta(c, t, ville).ok === true).length;
+      flash($("ctrMsg"), `Pas assez de contrats rentables à ${ville} (gros : ${n("gros")}, moyens : ${n("moyen")}, petits : ${n("petit")} ; il faut 1, 2 et 3 de compagnies différentes). Complète les prix dans « Audit des prix », baisse la marge, ou coche « Ignorer la rentabilité ».`, false);
+      return false;
+    }
+  }
+  tirage = { lieu: ville, contrats: choix.map(({ c, t: taille }) => ({ slug: c.slug, taille, nom: c.nom, prix: c.contrats[taille].prix, lignes: c.contrats[taille].lignes, renta: AUD ? renta(c, taille, ville) : null })) };
   $("ctrTitre").textContent = `Aperçu — ${tirage.lieu}`;
   $("ctrListe").innerHTML = tirage.contrats.map(c => `<figure class="ctr ctr-${c.taille}">
-      <figcaption><b>${LIB_TAILLE[c.taille]}</b><span class="hint">${esc(c.nom)}</span><span class="ctr-prix">${fmt(c.prix)}</span></figcaption>
+      <figcaption><b>${LIB_TAILLE[c.taille]}</b><span class="hint">${esc(c.nom)}</span><span class="ctr-prix">${fmt(c.prix)}</span>${c.renta?.ok != null
+        ? `<span class="hint ${c.renta.ok ? "pos" : "neg"}" title="Coût des ressources à ${esc(ville)} : ${fmt(Math.round(c.renta.cout))}">${c.renta.estime ? "~" : ""}${txtMarge(c.renta.marge)}</span>` : ""}</figcaption>
       <img src="${imgContrat(c)}" alt="${esc(c.nom)} — ${LIB_TAILLE[c.taille]}" loading="lazy">
     </figure>`).join("");
   $("ctrApercu").hidden = false;
@@ -1580,6 +1592,7 @@ function demarrer() {
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
   $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = $("tabCpt").hidden = !estAdmin();
   $("tabFrp").hidden = !estFrappeur();
+  $("tabAud").hidden = !(estAdmin() || estZone());
   $("sIntWrap").hidden = !estAdmin();
   $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
   if (demarre) return; demarre = true;
@@ -1934,6 +1947,134 @@ const bougerSemaine = d => { const s = $("frpSem"), i = s.selectedIndex - d; if 
 $("frpPrec").onclick = () => bougerSemaine(-1);
 $("frpSuiv").onclick = () => bougerSemaine(1);
 $("frpFiltre").onchange = () => renderFrappes();
+
+/* ---------- Audit des prix : denrées × villes, moyenne nationale, rentabilité des contrats ---------- */
+var AUD = null;                                                   // { villes, denrees, prix: Map(cle -> Map(ville -> {prix,…})), marge }
+const cleDenree = n => sansAccent(n).replace(/[^a-z0-9]/g, "");
+const ligneRes = l => { const m = String(l).match(/^(.*?)\s*[x×]\s*([0-9][0-9 .]*)\s*$/i); return m ? { nom: m[1].trim(), qte: parseInt(m[2].replace(/[ .]/g, ""), 10) || 0 } : { nom: String(l).trim(), qte: 1 }; };
+const fmtPrix = n => n == null ? "" : (Math.round(n * 100) / 100).toLocaleString("fr-FR");
+async function chargerAudit() {
+  const [v, d, p, m] = await Promise.all([sb.rpc("audit_villes"), sb.rpc("audit_denrees"), sb.rpc("audit_prix"), sb.rpc("audit_marge")]);
+  const err = [v, d, p, m].find(r => r.error);
+  if (err) { flash($("audMsg"), "Audit indisponible : " + err.error.message + (/audit_/.test(err.error.message) ? " (as-tu lancé 39_audit_prix.sql ?)" : ""), false); return false; }
+  const prix = new Map();
+  (p.data || []).forEach(r => { if (!prix.has(r.denree)) prix.set(r.denree, new Map()); prix.get(r.denree).set(r.ville, { prix: Number(r.prix), par: r.maj_par, le: r.maj_le }); });
+  AUD = { villes: v.data || [], denrees: d.data || [], prix, marge: Number(m.data ?? 20) };
+  return true;
+}
+const prixVille = (k, v) => AUD?.prix.get(k)?.get(v)?.prix ?? null;
+function moyenne(k) { const l = [...(AUD?.prix.get(k)?.values() || [])].map(x => x.prix); return l.length ? l.reduce((s, x) => s + x, 0) / l.length : null; }
+// Coût d'un contrat pour une ville : { cout, estime (moyenne utilisée), manque: [denrées sans prix] }
+function coutContrat(lignes, ville) {
+  let cout = 0, estime = false; const manque = [];
+  (lignes || []).forEach(l => {
+    const r = ligneRes(l), k = cleDenree(r.nom);
+    let pu = prixVille(k, ville);
+    if (pu == null) { pu = moyenne(k); if (pu != null) estime = true; }
+    if (pu == null) manque.push(r.nom); else cout += pu * r.qte;
+  });
+  return { cout: manque.length ? null : cout, estime, manque };
+}
+// Rentabilité : { ok: true/false/null (non évaluable), marge (%), cout, estime }
+function renta(c, taille, ville) {
+  const t = c.contrats?.[taille]; if (!t) return { ok: null };
+  const r = coutContrat(t.lignes, ville);
+  if (r.cout == null) return { ok: null, manque: r.manque };
+  const marge = r.cout > 0 ? (t.prix - r.cout) / r.cout * 100 : Infinity;
+  return { ok: marge >= (AUD?.marge ?? 20), marge, cout: r.cout, estime: r.estime, prix: t.prix };
+}
+const txtMarge = m => m === Infinity ? "∞" : (m > 0 ? "+" : "") + Math.round(m) + " %";
+
+async function ouvrirAudit() {
+  if (!await chargerAudit()) return;
+  $("audRentaCard").hidden = !estAdmin();
+  if (estAdmin()) {
+    if (!COMPAGNIES.length) await chargerCompagnies();
+    $("audMarge").value = AUD.marge;
+    const sv = $("audVille"), g = sv.value;
+    sv.innerHTML = '<option value="">Toutes les villes (résumé)</option>' + AUD.villes.map(v => `<option>${esc(v.ville)}</option>`).join("");
+    sv.value = g;
+  }
+  renderAudit();
+}
+function renderAudit() {
+  if (!AUD) return;
+  // mes villes d'abord (éditables), puis les autres
+  const villes = [...AUD.villes].sort((a, b) => (b.a_moi - a.a_moi) || a.ville.localeCompare(b.ville, "fr"));
+  const miennes = villes.filter(v => v.a_moi);
+  const q = sansAccent($("audCherche").value.trim()), manq = $("audManq").checked;
+  const lignes = AUD.denrees.filter(d => (!q || sansAccent(d.nom).includes(q)) && (!manq || miennes.some(v => prixVille(d.denree, v.ville) == null)));
+  const total = AUD.denrees.length * miennes.length, faits = AUD.denrees.reduce((s, d) => s + miennes.filter(v => prixVille(d.denree, v.ville) != null).length, 0);
+  $("audProg").textContent = miennes.length ? `— ${faits} / ${total} prix renseignés pour ${miennes.length > 1 ? "tes villes" : "ta ville"}` : "";
+  $("audTable").innerHTML = lignes.length ? `<div class="k-table"><table class="aud"><thead><tr><th>Denrée</th>${villes.map(v => `<th class="${v.a_moi ? "moi" : ""}">${esc(v.ville)}</th>`).join("")}<th class="moy">Moyenne</th></tr></thead><tbody>${
+    lignes.map(d => { const moy = moyenne(d.denree);
+      return `<tr><td><b>${esc(d.nom)}</b><br><span class="hint">${esc(d.compagnies)}</span></td>${villes.map(v => { const x = AUD.prix.get(d.denree)?.get(v.ville);
+        return v.a_moi
+          ? `<td class="moi"><input type="number" min="0" step="0.5" value="${x ? x.prix : ""}" data-pd="${esc(d.nom)}" data-pv="${esc(v.ville)}" title="${x ? "par " + esc(x.par || "?") + " le " + new Date(x.le).toLocaleDateString("fr-FR") : "Prix d'une unité à " + esc(v.ville)}"></td>`
+          : `<td class="r" title="${x ? "par " + esc(x.par || "?") + " le " + new Date(x.le).toLocaleDateString("fr-FR") : "pas encore renseigné"}">${x ? fmtPrix(x.prix) : '<span class="hint">—</span>'}</td>`; }).join("")}
+        <td class="r moy">${moy != null ? fmtPrix(moy) : '<span class="hint">—</span>'}</td></tr>`; }).join("")}</tbody></table></div>`
+    : `<p class="empty">${manq ? "Tous les prix de tes villes sont renseignés ✔" : "Aucune denrée ne correspond."}</p>`;
+  $("audTable").querySelectorAll("[data-pd]").forEach(inp => inp.onchange = async () => {
+    const v = inp.value.trim(), p = v === "" ? null : Number(v.replace(",", "."));
+    if (p != null && !(p >= 0)) { inp.value = ""; return flash($("audMsg"), "Prix invalide.", false); }
+    inp.classList.add("envoi");
+    const { error } = await sb.rpc("fixer_prix", { nom_: inp.dataset.pd, ville_: inp.dataset.pv, prix_: p });
+    inp.classList.remove("envoi");
+    if (error) return flash($("audMsg"), "Non enregistré : " + error.message, false);
+    const k = cleDenree(inp.dataset.pd);
+    if (!AUD.prix.has(k)) AUD.prix.set(k, new Map());
+    if (p == null) AUD.prix.get(k).delete(inp.dataset.pv); else AUD.prix.get(k).set(inp.dataset.pv, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
+    inp.classList.add("ok"); setTimeout(() => inp.classList.remove("ok"), 900);
+    // moyenne de la ligne + progression, sans tout redessiner (garde le focus)
+    const moy = moyenne(k), td = inp.closest("tr").querySelector(".moy"); if (td) td.innerHTML = moy != null ? fmtPrix(moy) : '<span class="hint">—</span>';
+    const f = AUD.denrees.reduce((s, d) => s + miennes.filter(x => prixVille(d.denree, x.ville) != null).length, 0);
+    $("audProg").textContent = `— ${f} / ${total} prix renseignés pour ${miennes.length > 1 ? "tes villes" : "ta ville"}`;
+    if (estAdmin()) renderRenta();
+  });
+  if (estAdmin()) renderRenta();
+}
+function renderRenta() {
+  if (!AUD || !estAdmin()) return;
+  const cies = COMPAGNIES.filter(c => c.actif), ville = $("audVille").value, TA = ["petit", "moyen", "gros"];
+  const cell = r => r.ok == null ? `<td class="r renta-na" title="Prix manquants : ${esc((r.manque || []).join(", "))}">?</td>`
+    : `<td class="r ${r.ok ? "renta-ok" : "renta-ko"}" title="Coût ${fmt(Math.round(r.cout))}${r.estime ? " (en partie à la moyenne nationale)" : ""} · contrat ${fmt(r.prix)}">${r.estime ? "~" : ""}${txtMarge(r.marge)}</td>`;
+  if (!ville) {
+    // résumé : nombre de contrats rentables par ville et par taille
+    $("audRenta").innerHTML = `<div class="k-table"><table class="k-jr"><thead><tr><th>Ville</th><th class="r">Gros</th><th class="r">Moyens</th><th class="r">Petits</th><th class="r">Non évaluables</th><th>Tirage</th></tr></thead><tbody>${
+      AUD.villes.map(v => { const n = t => cies.filter(c => renta(c, t, v.ville).ok === true).length, na = cies.reduce((s, c) => s + TA.filter(t => renta(c, t, v.ville).ok == null).length, 0);
+        const g = n("gros"), m = n("moyen"), p = n("petit"), possible = tiragePossible(v.ville);
+        return `<tr><td><a href="#" data-av="${esc(v.ville)}">${esc(v.ville)}</a></td><td class="r">${g}</td><td class="r">${m}</td><td class="r">${p}</td><td class="r">${na || "—"}</td>
+          <td>${possible ? '<span class="tag ok">possible</span>' : '<span class="tag err">pas assez</span>'}</td></tr>`; }).join("")}</tbody></table></div>
+      <p class="hint">Il faut au moins 1 gros, 2 moyens et 3 petits contrats rentables, de 6 compagnies différentes. Clique sur une ville pour le détail.</p>`;
+    $("audRenta").querySelectorAll("[data-av]").forEach(a => a.onclick = e => { e.preventDefault(); $("audVille").value = a.dataset.av; renderRenta(); });
+  } else {
+    $("audRenta").innerHTML = `<div class="k-table"><table class="k-jr"><thead><tr><th>Compagnie</th>${TA.map(t => `<th class="r">${LIB_TAILLE[t]}</th>`).join("")}</tr></thead><tbody>${
+      cies.map(c => `<tr><td>${esc(c.nom)}</td>${TA.map(t => cell(renta(c, t, ville))).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="hint">Marge = (prix du contrat − coût des ressources à ${esc(ville)}) / coût. Vert = rentable (≥ ${AUD.marge} %), rouge = pas assez, ? = prix manquants, ~ = calculé en partie avec la moyenne nationale.</p>`;
+  }
+}
+$("audCherche").oninput = renderAudit;
+$("audManq").onchange = renderAudit;
+$("audVille").onchange = renderRenta;
+$("audMarge").onchange = async () => {
+  const m = Number($("audMarge").value);
+  if (!(m >= 0)) return;
+  const { error } = await sb.rpc("fixer_marge", { marge: m });
+  if (error) return flash($("audRentaMsg"), "Non enregistré : " + error.message, false);
+  AUD.marge = m; flash($("audRentaMsg"), `Marge minimale : ${m} %.`, true); renderRenta();
+};
+// Tirage : 1 gros, 2 moyens, 3 petits rentables pour la ville, de compagnies différentes
+function tirageRentable(ville) {
+  const cies = COMPAGNIES.filter(c => c.actif), ok = (c, t) => renta(c, t, ville).ok === true;
+  for (let essai = 0; essai < 300; essai++) {
+    const m = [...cies]; for (let i = m.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [m[i], m[j]] = [m[j], m[i]]; }
+    const pris = new Set(), res = [];
+    for (const t of TIRAGE) { const c = m.find(x => !pris.has(x.slug) && ok(x, t)); if (!c) break; pris.add(c.slug); res.push({ c, t }); }
+    if (res.length === TIRAGE.length) return res;
+  }
+  return null;
+}
+const tiragePossible = ville => !!tirageRentable(ville);
 
 /* ---------- Démarrage ---------- */
 if (SUPABASE_URL.includes("XXXXXXXX")) ecranConnexion("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.", false);

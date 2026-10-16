@@ -305,3 +305,18 @@ tr.k-retire .tag{text-decoration:none}
 li.raye,tr.raye td{color:var(--muted)}
 li.raye{list-style:none;margin-left:-1em}
 li.raye::before{content:"✕ ";color:var(--err);font-size:.8rem}
+
+/* ---------- Audit des prix ---------- */
+table.aud{font-size:.88rem}
+table.aud th{white-space:nowrap;font-size:.7rem;text-align:center}
+table.aud th:first-child{text-align:left}
+table.aud td{padding:4px}
+table.aud td:first-child{min-width:170px}
+table.aud .moi{background:var(--soft)}
+table.aud input{width:72px;padding:3px 5px;text-align:right}
+table.aud input.envoi{opacity:.5}
+table.aud input.ok{outline:2px solid var(--ok)}
+table.aud .moy{font-weight:700;border-left:1px solid var(--line)}
+.renta-ok{color:var(--ok);font-weight:700}
+.renta-ko{color:var(--err)}
+.renta-na{color:var(--muted)}
