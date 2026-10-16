@@ -153,7 +153,7 @@ function showTab(t) {
   if (t === "frp" && !estFrappeur()) t = "perm";
   const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", frp: "viewFrp", aud: "viewAud", ctr: "viewCtr", cpt: "viewCpt", cat: "viewCat", reg: "viewReg" };
   ["viewPerm", "viewHist", "viewStock", "viewFrp", "viewAud", "viewCtr", "viewCpt", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
-  if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); chargerAudit(); }
+  if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); }
   if (t === "stock") renderStock();
   if (t === "cpt") chargerCompta();
   if (t === "frp") chargerFrappes();
@@ -1155,6 +1155,8 @@ function renderStock() {
 // Images : dossiers du site (GitHub) — contrats/<slug>-<taille>.jpg et sceaux/<ville>.png
 const imgContrat = c => {
   const k = COMPAGNIES.find(x => x.slug === c.slug);
+  if (k?.images === "genere") return parchemin(k.nom, k.contrats[c.taille] || { prix: c.prix, lignes: c.lignes || [] });
+  if (!k && String(c.slug).startsWith("gen-")) return parchemin(c.nom || "Contrat", { prix: c.prix, lignes: c.lignes || [] });
   const surSite = k ? k.images === "site" : SLUGS_SITE.includes(c.slug);
   return surSite ? `contrats/${c.slug}-${c.taille}.jpg`
     : `${SUPABASE_URL}/storage/v1/object/public/contrats/modeles/${c.slug}-${c.taille}.jpg` + (k ? "?v=" + Date.parse(k.maj_le) : "");
@@ -1187,27 +1189,17 @@ async function majLieuxContrats() {
   if (prete) sel.value = prete.ville;
 }
 function genererContrats() {
-  // une compagnie différente par contrat, tirée au hasard ; seulement les contrats rentables pour la ville (audit des prix)
-  const melange = COMPAGNIES.filter(c => c.actif), ville = $("ctrLieu").value;
-  if (melange.length < TIRAGE.length) { flash($("ctrMsg"), `Il faut au moins ${TIRAGE.length} compagnies actives (Réglages) : il y en a ${melange.length}.`, false); return false; }
-  let choix;
-  if ($("ctrForcer").checked) {
-    for (let i = melange.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [melange[i], melange[j]] = [melange[j], melange[i]]; }
-    choix = TIRAGE.map((t, i) => ({ c: melange[i], t }));
-  } else {
-    if (!AUD) { flash($("ctrMsg"), "Prix de l'audit pas encore chargés : réessaie dans un instant (ou coche « Ignorer la rentabilité »).", false); chargerAudit(); return false; }
-    choix = tirageRentable(ville);
-    if (!choix) {
-      const n = t => melange.filter(c => renta(c, t, ville).ok === true).length;
-      flash($("ctrMsg"), `Pas assez de contrats rentables à ${ville} (gros : ${n("gros")}, moyens : ${n("moyen")}, petits : ${n("petit")} ; il faut 1, 2 et 3 de compagnies différentes). Complète les prix dans « Audit des prix », baisse la marge, ou coche « Ignorer la rentabilité ».`, false);
-      return false;
-    }
-  }
-  tirage = { lieu: ville, contrats: choix.map(({ c, t: taille }) => ({ slug: c.slug, taille, nom: c.nom, prix: c.contrats[taille].prix, lignes: c.contrats[taille].lignes, renta: AUD ? renta(c, taille, ville) : null })) };
+  // une compagnie différente par contrat, tirée au hasard ; les contrats construits pour une ville ne sortent que pour elle
+  const ville = $("ctrLieu").value, melange = COMPAGNIES.filter(c => c.actif && (!c.ville || cleVille(c.ville) === cleVille(ville)));
+  if (melange.length < TIRAGE.length) { flash($("ctrMsg"), `Il faut au moins ${TIRAGE.length} compagnies actives pour ${ville} (Réglages) : il y en a ${melange.length}.`, false); return false; }
+  for (let i = melange.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [melange[i], melange[j]] = [melange[j], melange[i]]; }
+  tirage = { lieu: ville, contrats: TIRAGE.map((taille, i) => {
+    const c = melange[i];
+    return { slug: c.slug, taille, nom: c.nom, prix: c.contrats[taille].prix, lignes: c.contrats[taille].lignes };
+  }) };
   $("ctrTitre").textContent = `Aperçu — ${tirage.lieu}`;
   $("ctrListe").innerHTML = tirage.contrats.map(c => `<figure class="ctr ctr-${c.taille}">
-      <figcaption><b>${LIB_TAILLE[c.taille]}</b><span class="hint">${esc(c.nom)}</span><span class="ctr-prix">${fmt(c.prix)}</span>${c.renta?.ok != null
-        ? `<span class="hint ${c.renta.ok ? "pos" : "neg"}" title="Coût des ressources à ${esc(ville)} : ${fmt(Math.round(c.renta.cout))}">${c.renta.estime ? "~" : ""}${txtMarge(c.renta.marge)}</span>` : ""}</figcaption>
+      <figcaption><b>${LIB_TAILLE[c.taille]}</b><span class="hint">${esc(c.nom)}</span><span class="ctr-prix">${fmt(c.prix)}</span></figcaption>
       <img src="${imgContrat(c)}" alt="${esc(c.nom)} — ${LIB_TAILLE[c.taille]}" loading="lazy">
     </figure>`).join("");
   $("ctrApercu").hidden = false;
@@ -1433,7 +1425,7 @@ function renderCompagnies() {
   if (!$("regCie")) return;
   $("regCie").innerHTML = COMPAGNIES.length ? `<table><tbody>${COMPAGNIES.map(c => `<tr class="reg-row${c.actif ? "" : " cie-off"}">
       <td><img class="cie-mini" src="${imgContrat({ slug: c.slug, taille: "petit" })}" alt="" loading="lazy"></td>
-      <td><b>${esc(c.nom)}</b><br><span class="hint">${TAILLES.map(t => fmt(c.contrats?.[t]?.prix)).join(" · ")}${c.actif ? "" : " — désactivée"}</span></td>
+      <td><b>${esc(c.nom)}</b>${c.images === "genere" ? ` <span class="tag">construit · ${esc(c.ville || "")}</span>` : ""}<br><span class="hint">${TAILLES.map(t => fmt(c.contrats?.[t]?.prix)).join(" · ")}${c.actif ? "" : " — désactivée"}</span></td>
       <td class="reg-act"><label class="liv"><input type="checkbox" data-cie-actif="${esc(c.slug)}" ${c.actif ? "checked" : ""}> Au tirage</label>
         <button type="button" class="btn small" data-cie-edit="${esc(c.slug)}">Modifier</button>
         <button type="button" class="btn small" data-cie-suppr="${esc(c.slug)}">Supprimer</button></td></tr>`).join("")}</tbody></table>`
@@ -1948,133 +1940,213 @@ $("frpPrec").onclick = () => bougerSemaine(-1);
 $("frpSuiv").onclick = () => bougerSemaine(1);
 $("frpFiltre").onchange = () => renderFrappes();
 
-/* ---------- Audit des prix : denrées × villes, moyenne nationale, rentabilité des contrats ---------- */
-var AUD = null;                                                   // { villes, denrees, prix: Map(cle -> Map(ville -> {prix,…})), marge }
+/* ---------- Audit des prix : relevé par ville, vue nationale, contrats construits à partir des prix ---------- */
+var AUD = null;                                                   // { villes, denrees, prix: Map(cle -> Map(ville -> {prix, par, le})) }
 const cleDenree = n => sansAccent(n).replace(/[^a-z0-9]/g, "");
-const ligneRes = l => { const m = String(l).match(/^(.*?)\s*[x×]\s*([0-9][0-9 .]*)\s*$/i); return m ? { nom: m[1].trim(), qte: parseInt(m[2].replace(/[ .]/g, ""), 10) || 0 } : { nom: String(l).trim(), qte: 1 }; };
-const fmtPrix = n => n == null ? "" : (Math.round(n * 100) / 100).toLocaleString("fr-FR");
+const fmtPrix = n => n == null ? "—" : (Math.round(n * 100) / 100).toLocaleString("fr-FR");
+const VIEUX_MS = 30 * 24 * 3600 * 1000;                           // un prix de plus d'un mois est « à revérifier »
+const vieux = x => x && Date.now() - Date.parse(x.le) > VIEUX_MS;
+// catégories (ordre = ordre d'affichage ; « Outils » avant « Armes » pour la hache de bûcheron)
+const CATS_DENREES = [
+  ["Nourriture et boissons", /biere|vin\b|hydromel|chou|patate|poireau|tomate|fromage|tarte|venaison|viande|gourde|pomme|pain|miel|fruit|legume/],
+  ["Peaux et parties d'animaux", /cuir|peau|patte|ramure|griffe|defense|fourrure brute/],
+  ["Minerais, lingots, combustibles", /lingot|minerai|charbon|bois/],
+  ["Gemmes", /amethyste|emeraude|grenat|rubis|saphir|diamant|gemme/],
+  ["Outils", /pioche|hache de bucheron|clef|marteau de forge/],
+  ["Armes", /epee|espadon|hache|marteau|masse|arc\b|arc |fleche|dague/],
+  ["Armures et vêtements", /plastron|armure|casque|bottes|gantelets|cape|vetement|fil\b|bobine/],
+  ["Alchimie", /potion|lys|pied de lutin|sel|ingredient/],
+];
+const catDenree = n => { const s = sansAccent(n); return (CATS_DENREES.find(([, r]) => r.test(s)) || ["Autres"])[0]; };
+
 async function chargerAudit() {
-  const [v, d, p, m] = await Promise.all([sb.rpc("audit_villes"), sb.rpc("audit_denrees"), sb.rpc("audit_prix"), sb.rpc("audit_marge")]);
-  const err = [v, d, p, m].find(r => r.error);
+  const [v, d, p] = await Promise.all([sb.rpc("audit_villes"), sb.rpc("audit_denrees"), sb.rpc("audit_prix")]);
+  const err = [v, d, p].find(r => r.error);
   if (err) { flash($("audMsg"), "Audit indisponible : " + err.error.message + (/audit_/.test(err.error.message) ? " (as-tu lancé 39_audit_prix.sql ?)" : ""), false); return false; }
   const prix = new Map();
   (p.data || []).forEach(r => { if (!prix.has(r.denree)) prix.set(r.denree, new Map()); prix.get(r.denree).set(r.ville, { prix: Number(r.prix), par: r.maj_par, le: r.maj_le }); });
-  AUD = { villes: v.data || [], denrees: d.data || [], prix, marge: Number(m.data ?? 20) };
+  AUD = { villes: v.data || [], denrees: (d.data || []).map(x => ({ cle: x.denree, nom: x.nom, cat: catDenree(x.nom) })), prix };
   return true;
 }
-const prixVille = (k, v) => AUD?.prix.get(k)?.get(v)?.prix ?? null;
-function moyenne(k) { const l = [...(AUD?.prix.get(k)?.values() || [])].map(x => x.prix); return l.length ? l.reduce((s, x) => s + x, 0) / l.length : null; }
-// Coût d'un contrat pour une ville : { cout, estime (moyenne utilisée), manque: [denrées sans prix] }
-function coutContrat(lignes, ville) {
-  let cout = 0, estime = false; const manque = [];
-  (lignes || []).forEach(l => {
-    const r = ligneRes(l), k = cleDenree(r.nom);
-    let pu = prixVille(k, ville);
-    if (pu == null) { pu = moyenne(k); if (pu != null) estime = true; }
-    if (pu == null) manque.push(r.nom); else cout += pu * r.qte;
-  });
-  return { cout: manque.length ? null : cout, estime, manque };
+const prixDe = (k, v) => AUD?.prix.get(k)?.get(v) || null;
+function stats(k) {
+  const m = AUD?.prix.get(k); if (!m || !m.size) return { moy: null, n: 0 };
+  const l = [...m].map(([ville, x]) => ({ ville, prix: x.prix }));
+  const moy = l.reduce((s, x) => s + x.prix, 0) / l.length;
+  l.sort((a, b) => a.prix - b.prix);
+  return { moy, n: l.length, min: l[0], max: l[l.length - 1] };
 }
-// Rentabilité : { ok: true/false/null (non évaluable), marge (%), cout, estime }
-function renta(c, taille, ville) {
-  const t = c.contrats?.[taille]; if (!t) return { ok: null };
-  const r = coutContrat(t.lignes, ville);
-  if (r.cout == null) return { ok: null, manque: r.manque };
-  const marge = r.cout > 0 ? (t.prix - r.cout) / r.cout * 100 : Infinity;
-  return { ok: marge >= (AUD?.marge ?? 20), marge, cout: r.cout, estime: r.estime, prix: t.prix };
-}
-const txtMarge = m => m === Infinity ? "∞" : (m > 0 ? "+" : "") + Math.round(m) + " %";
 
 async function ouvrirAudit() {
   if (!await chargerAudit()) return;
-  $("audRentaCard").hidden = !estAdmin();
+  const mes = AUD.villes.filter(v => v.a_moi), sv = $("audVille"), g = sv.value;
+  sv.innerHTML = mes.map(v => `<option>${esc(v.ville)}</option>`).join("") || '<option value="">— aucune ville —</option>';
+  if (mes.some(v => v.ville === g)) sv.value = g;
+  $("audGenCard").hidden = !estAdmin();
   if (estAdmin()) {
     if (!COMPAGNIES.length) await chargerCompagnies();
-    $("audMarge").value = AUD.marge;
-    const sv = $("audVille"), g = sv.value;
-    sv.innerHTML = '<option value="">Toutes les villes (résumé)</option>' + AUD.villes.map(v => `<option>${esc(v.ville)}</option>`).join("");
-    sv.value = g;
+    const gv = $("genVille"), gg = gv.value;
+    gv.innerHTML = AUD.villes.map(v => `<option>${esc(v.ville)}</option>`).join(""); if (gg) gv.value = gg;
   }
-  renderAudit();
+  renderReleve(); renderNational();
 }
-function renderAudit() {
+
+// 1. Relevé d'une ville, par catégorie
+function renderReleve() {
   if (!AUD) return;
-  // mes villes d'abord (éditables), puis les autres
-  const villes = [...AUD.villes].sort((a, b) => (b.a_moi - a.a_moi) || a.ville.localeCompare(b.ville, "fr"));
-  const miennes = villes.filter(v => v.a_moi);
-  const q = sansAccent($("audCherche").value.trim()), manq = $("audManq").checked;
-  const lignes = AUD.denrees.filter(d => (!q || sansAccent(d.nom).includes(q)) && (!manq || miennes.some(v => prixVille(d.denree, v.ville) == null)));
-  const total = AUD.denrees.length * miennes.length, faits = AUD.denrees.reduce((s, d) => s + miennes.filter(v => prixVille(d.denree, v.ville) != null).length, 0);
-  $("audProg").textContent = miennes.length ? `— ${faits} / ${total} prix renseignés pour ${miennes.length > 1 ? "tes villes" : "ta ville"}` : "";
-  $("audTable").innerHTML = lignes.length ? `<div class="k-table"><table class="aud"><thead><tr><th>Denrée</th>${villes.map(v => `<th class="${v.a_moi ? "moi" : ""}">${esc(v.ville)}</th>`).join("")}<th class="moy">Moyenne</th></tr></thead><tbody>${
-    lignes.map(d => { const moy = moyenne(d.denree);
-      return `<tr><td><b>${esc(d.nom)}</b><br><span class="hint">${esc(d.compagnies)}</span></td>${villes.map(v => { const x = AUD.prix.get(d.denree)?.get(v.ville);
-        return v.a_moi
-          ? `<td class="moi"><input type="number" min="0" step="0.5" value="${x ? x.prix : ""}" data-pd="${esc(d.nom)}" data-pv="${esc(v.ville)}" title="${x ? "par " + esc(x.par || "?") + " le " + new Date(x.le).toLocaleDateString("fr-FR") : "Prix d'une unité à " + esc(v.ville)}"></td>`
-          : `<td class="r" title="${x ? "par " + esc(x.par || "?") + " le " + new Date(x.le).toLocaleDateString("fr-FR") : "pas encore renseigné"}">${x ? fmtPrix(x.prix) : '<span class="hint">—</span>'}</td>`; }).join("")}
-        <td class="r moy">${moy != null ? fmtPrix(moy) : '<span class="hint">—</span>'}</td></tr>`; }).join("")}</tbody></table></div>`
-    : `<p class="empty">${manq ? "Tous les prix de tes villes sont renseignés ✔" : "Aucune denrée ne correspond."}</p>`;
-  $("audTable").querySelectorAll("[data-pd]").forEach(inp => inp.onchange = async () => {
+  const ville = $("audVille").value, q = sansAccent($("audCherche").value.trim()), afaire = $("audAFaire").checked;
+  if (!ville) { $("audReleve").innerHTML = '<p class="empty">Tu n\'as aucune ville à relever.</p>'; $("audProg").textContent = ""; return; }
+  const faits = AUD.denrees.filter(d => prixDe(d.cle, ville)).length, aRev = AUD.denrees.filter(d => vieux(prixDe(d.cle, ville))).length;
+  $("audProg").textContent = `— ${ville} : ${faits} / ${AUD.denrees.length} relevés${aRev ? ` · ${aRev} à revérifier` : ""}`;
+  const liste = AUD.denrees.filter(d => (!q || sansAccent(d.nom).includes(q)) && (!afaire || !prixDe(d.cle, ville) || vieux(prixDe(d.cle, ville))));
+  const cats = [...CATS_DENREES.map(c => c[0]), "Autres"].filter(c => liste.some(d => d.cat === c));
+  $("audReleve").innerHTML = cats.length ? cats.map(c => `<h3 class="k-titre">${esc(c)}</h3><div class="releve">${
+    liste.filter(d => d.cat === c).map(d => { const x = prixDe(d.cle, ville), s = stats(d.cle);
+      const ecart = x && s.n > 1 ? (x.prix - s.moy) / s.moy : null;
+      const pastille = ecart == null ? "" : ecart <= -0.15 ? '<span class="past bas" title="Nettement moins cher que la moyenne">▼</span>' : ecart >= 0.15 ? '<span class="past haut" title="Nettement plus cher que la moyenne">▲</span>' : "";
+      return `<div class="rl${vieux(x) ? " vieux" : ""}"><span class="rl-nom">${esc(d.nom)}</span>
+        <input type="number" min="0" step="0.5" value="${x ? x.prix : ""}" data-pd="${esc(d.nom)}" placeholder="prix">
+        <span class="rl-moy">${pastille} moy. ${fmtPrix(s.moy)} <span class="hint">(${s.n}/10)</span></span>
+        <span class="hint rl-date">${x ? (vieux(x) ? '<span class="aud-vieux">à revérifier</span> · ' : "") + new Date(x.le).toLocaleDateString("fr-FR") : ""}</span></div>`; }).join("")}</div>`).join("")
+    : `<p class="empty">${afaire ? `Tout est relevé et à jour pour ${esc(ville)} ✔` : "Aucune denrée ne correspond."}</p>`;
+  $("audReleve").querySelectorAll("[data-pd]").forEach(inp => inp.onchange = async () => {
     const v = inp.value.trim(), p = v === "" ? null : Number(v.replace(",", "."));
     if (p != null && !(p >= 0)) { inp.value = ""; return flash($("audMsg"), "Prix invalide.", false); }
     inp.classList.add("envoi");
-    const { error } = await sb.rpc("fixer_prix", { nom_: inp.dataset.pd, ville_: inp.dataset.pv, prix_: p });
+    const { error } = await sb.rpc("fixer_prix", { nom_: inp.dataset.pd, ville_: ville, prix_: p });
     inp.classList.remove("envoi");
     if (error) return flash($("audMsg"), "Non enregistré : " + error.message, false);
     const k = cleDenree(inp.dataset.pd);
     if (!AUD.prix.has(k)) AUD.prix.set(k, new Map());
-    if (p == null) AUD.prix.get(k).delete(inp.dataset.pv); else AUD.prix.get(k).set(inp.dataset.pv, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
+    if (p == null) AUD.prix.get(k).delete(ville); else AUD.prix.get(k).set(ville, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
+    const ligne = inp.closest(".rl"), s = stats(k), x = prixDe(k, ville), ecart = x && s.n > 1 ? (x.prix - s.moy) / s.moy : null;
+    ligne.classList.remove("vieux");
+    ligne.querySelector(".rl-moy").innerHTML = (ecart == null ? "" : ecart <= -0.15 ? '<span class="past bas">▼</span> ' : ecart >= 0.15 ? '<span class="past haut">▲</span> ' : "") + `moy. ${fmtPrix(s.moy)} <span class="hint">(${s.n}/10)</span>`;
+    ligne.querySelector(".rl-date").textContent = x ? new Date(x.le).toLocaleDateString("fr-FR") : "";
     inp.classList.add("ok"); setTimeout(() => inp.classList.remove("ok"), 900);
-    // moyenne de la ligne + progression, sans tout redessiner (garde le focus)
-    const moy = moyenne(k), td = inp.closest("tr").querySelector(".moy"); if (td) td.innerHTML = moy != null ? fmtPrix(moy) : '<span class="hint">—</span>';
-    const f = AUD.denrees.reduce((s, d) => s + miennes.filter(x => prixVille(d.denree, x.ville) != null).length, 0);
-    $("audProg").textContent = `— ${f} / ${total} prix renseignés pour ${miennes.length > 1 ? "tes villes" : "ta ville"}`;
-    if (estAdmin()) renderRenta();
+    const f = AUD.denrees.filter(d => prixDe(d.cle, ville)).length, ar = AUD.denrees.filter(d => vieux(prixDe(d.cle, ville))).length;
+    $("audProg").textContent = `— ${ville} : ${f} / ${AUD.denrees.length} relevés${ar ? ` · ${ar} à revérifier` : ""}`;
+    renderNational();
   });
-  if (estAdmin()) renderRenta();
 }
-function renderRenta() {
-  if (!AUD || !estAdmin()) return;
-  const cies = COMPAGNIES.filter(c => c.actif), ville = $("audVille").value, TA = ["petit", "moyen", "gros"];
-  const cell = r => r.ok == null ? `<td class="r renta-na" title="Prix manquants : ${esc((r.manque || []).join(", "))}">?</td>`
-    : `<td class="r ${r.ok ? "renta-ok" : "renta-ko"}" title="Coût ${fmt(Math.round(r.cout))}${r.estime ? " (en partie à la moyenne nationale)" : ""} · contrat ${fmt(r.prix)}">${r.estime ? "~" : ""}${txtMarge(r.marge)}</td>`;
-  if (!ville) {
-    // résumé : nombre de contrats rentables par ville et par taille
-    $("audRenta").innerHTML = `<div class="k-table"><table class="k-jr"><thead><tr><th>Ville</th><th class="r">Gros</th><th class="r">Moyens</th><th class="r">Petits</th><th class="r">Non évaluables</th><th>Tirage</th></tr></thead><tbody>${
-      AUD.villes.map(v => { const n = t => cies.filter(c => renta(c, t, v.ville).ok === true).length, na = cies.reduce((s, c) => s + TA.filter(t => renta(c, t, v.ville).ok == null).length, 0);
-        const g = n("gros"), m = n("moyen"), p = n("petit"), possible = tiragePossible(v.ville);
-        return `<tr><td><a href="#" data-av="${esc(v.ville)}">${esc(v.ville)}</a></td><td class="r">${g}</td><td class="r">${m}</td><td class="r">${p}</td><td class="r">${na || "—"}</td>
-          <td>${possible ? '<span class="tag ok">possible</span>' : '<span class="tag err">pas assez</span>'}</td></tr>`; }).join("")}</tbody></table></div>
-      <p class="hint">Il faut au moins 1 gros, 2 moyens et 3 petits contrats rentables, de 6 compagnies différentes. Clique sur une ville pour le détail.</p>`;
-    $("audRenta").querySelectorAll("[data-av]").forEach(a => a.onclick = e => { e.preventDefault(); $("audVille").value = a.dataset.av; renderRenta(); });
-  } else {
-    $("audRenta").innerHTML = `<div class="k-table"><table class="k-jr"><thead><tr><th>Compagnie</th>${TA.map(t => `<th class="r">${LIB_TAILLE[t]}</th>`).join("")}</tr></thead><tbody>${
-      cies.map(c => `<tr><td>${esc(c.nom)}</td>${TA.map(t => cell(renta(c, t, ville))).join("")}</tr>`).join("")}</tbody></table></div>
-      <p class="hint">Marge = (prix du contrat − coût des ressources à ${esc(ville)}) / coût. Vert = rentable (≥ ${AUD.marge} %), rouge = pas assez, ? = prix manquants, ~ = calculé en partie avec la moyenne nationale.</p>`;
+
+// 2. Vue nationale : avancement par ville + une ligne par denrée (détail des villes au clic)
+function renderNational() {
+  if (!AUD) return;
+  const N = AUD.denrees.length;
+  $("audVilles").innerHTML = AUD.villes.map(v => { const n = AUD.denrees.filter(d => prixDe(d.cle, v.ville)).length;
+    return `<div class="av"><span>${esc(v.ville)}</span><span class="av-b"><span style="width:${N ? n / N * 100 : 0}%"></span></span><span class="hint">${n}/${N}</span></div>`; }).join("");
+  const ouverts = new Set([...$("audNat").querySelectorAll("tr.nat-det")].map(t => t.dataset.k));
+  $("audNat").innerHTML = `<div class="k-table"><table class="k-jr nat"><thead><tr><th>Denrée</th><th class="r">Moyenne</th><th>Moins chère</th><th>Plus chère</th><th class="r">Villes</th></tr></thead><tbody>${
+    AUD.denrees.map(d => { const s = stats(d.cle);
+      return `<tr class="nat-l" data-k="${esc(d.cle)}"><td>${esc(d.nom)}</td><td class="r"><b>${fmtPrix(s.moy)}</b></td>
+        <td>${s.n ? `${esc(s.min.ville)} <span class="hint">${fmtPrix(s.min.prix)}</span>` : '<span class="hint">—</span>'}</td>
+        <td>${s.n > 1 ? `${esc(s.max.ville)} <span class="hint">${fmtPrix(s.max.prix)}</span>` : '<span class="hint">—</span>'}</td>
+        <td class="r">${s.n}/10</td></tr>${ouverts.has(d.cle) ? detailNat(d) : ""}`; }).join("")}</tbody></table></div>`;
+  $("audNat").querySelectorAll("tr.nat-l").forEach(tr => tr.onclick = () => {
+    const suiv = tr.nextElementSibling;
+    if (suiv?.classList.contains("nat-det")) suiv.remove();
+    else tr.insertAdjacentHTML("afterend", detailNat(AUD.denrees.find(d => d.cle === tr.dataset.k)));
+  });
+}
+function detailNat(d) {
+  return `<tr class="nat-det" data-k="${esc(d.cle)}"><td colspan="5"><div class="nat-villes">${AUD.villes.map(v => { const x = prixDe(d.cle, v.ville);
+    return `<span class="${x ? (vieux(x) ? "vieux" : "") : "manque"}"><b>${esc(v.ville)}</b> ${x ? fmtPrix(x.prix) : "—"}${x ? ` <span class="hint">${esc(x.par || "")}, ${new Date(x.le).toLocaleDateString("fr-FR")}</span>` : ""}</span>`; }).join("")}</div></td></tr>`;
+}
+$("audVille").onchange = renderReleve;
+$("audCherche").oninput = renderReleve;
+$("audAFaire").onchange = renderReleve;
+
+// 3. Construire des contrats pour une ville (admin) : denrées moins chères que la moyenne
+let GEN = null;
+const arrondiQte = q => q < 20 ? Math.max(1, Math.round(q)) : q < 100 ? Math.round(q / 5) * 5 : q < 1000 ? Math.round(q / 10) * 10 : Math.round(q / 50) * 50;
+function construireContrats(ville) {
+  const cand = AUD.denrees.map(d => { const x = prixDe(d.cle, ville), s = stats(d.cle); return { d, local: x?.prix, moy: s.moy, n: s.n }; })
+    .filter(c => c.local != null && c.n >= 2 && c.moy > c.local && c.local > 0)
+    .map(c => ({ ...c, gain: (c.moy - c.local) / c.moy }))
+    .sort((a, b) => b.gain - a.gain);
+  if (!cand.length) return { erreur: `Aucune denrée moins chère que la moyenne nationale à ${ville} (il faut le prix de ${ville} et d'au moins une autre ville).` };
+  const cibles = { petit: Number($("genPetit").value) || 4000, moyen: Number($("genMoyen").value) || 12000, gros: Number($("genGros").value) || 25000 };
+  const nbLignes = { petit: [1, 2], moyen: [2, 3], gros: [3, 4] }, contrats = {};
+  for (const t of ["petit", "moyen", "gros"]) {
+    const top = cand.slice(0, Math.max(6, nbLignes[t][1])).sort(() => Math.random() - 0.5);
+    const n = Math.min(cand.length, nbLignes[t][0] + Math.floor(Math.random() * (nbLignes[t][1] - nbLignes[t][0] + 1)));
+    const pris = top.slice(0, n);
+    let lignes = pris.map(c => ({ c, qte: arrondiQte(cibles[t] / n / c.moy) }));
+    const valeur = lignes.reduce((s, l) => s + l.qte * l.c.moy, 0), cout = lignes.reduce((s, l) => s + l.qte * l.c.local, 0);
+    let prix = Math.round(valeur / 50) * 50;
+    if (prix <= cout) prix = Math.ceil(cout * 1.05 / 50) * 50;
+    contrats[t] = { prix, lignes: lignes.map(l => `${l.c.d.nom} x ${l.qte}`), detail: lignes, cout, benef: prix - cout };
   }
+  return { ville, contrats };
 }
-$("audCherche").oninput = renderAudit;
-$("audManq").onchange = renderAudit;
-$("audVille").onchange = renderRenta;
-$("audMarge").onchange = async () => {
-  const m = Number($("audMarge").value);
-  if (!(m >= 0)) return;
-  const { error } = await sb.rpc("fixer_marge", { marge: m });
-  if (error) return flash($("audRentaMsg"), "Non enregistré : " + error.message, false);
-  AUD.marge = m; flash($("audRentaMsg"), `Marge minimale : ${m} %.`, true); renderRenta();
+function renderGen() {
+  $("genListe").innerHTML = ["petit", "moyen", "gros"].map(t => { const c = GEN.contrats[t];
+    return `<figure class="gen-c"><img src="${parchemin(`Contrat de ${GEN.ville}`, c)}" alt="">
+      <figcaption><b>${LIB_TAILLE[t]}</b> — ${fmt(c.prix)}
+        <ul>${c.detail.map(l => `<li>${l.qte.toLocaleString("fr-FR")} × ${esc(l.c.d.nom)} <span class="hint">local ${fmtPrix(l.c.local)} / moy. ${fmtPrix(l.c.moy)}</span></li>`).join("")}</ul>
+        <span class="hint">Coût à ${esc(GEN.ville)} : ${fmt(Math.round(c.cout))}</span><br><b class="pos">Bénéfice : ${fmt(Math.round(c.benef))}</b> <span class="hint">(${Math.round(c.benef / c.cout * 100)} %)</span>
+      </figcaption></figure>`; }).join("");
+  $("genApercu").hidden = false;
+}
+$("genGo").onclick = $("genRegen").onclick = async () => {
+  if (!AUD) await chargerAudit();
+  const r = construireContrats($("genVille").value);
+  if (r.erreur) { $("genApercu").hidden = true; return flash($("genMsg"), r.erreur, false); }
+  GEN = r; $("genMsg").className = "msg"; renderGen();
 };
-// Tirage : 1 gros, 2 moyens, 3 petits rentables pour la ville, de compagnies différentes
-function tirageRentable(ville) {
-  const cies = COMPAGNIES.filter(c => c.actif), ok = (c, t) => renta(c, t, ville).ok === true;
-  for (let essai = 0; essai < 300; essai++) {
-    const m = [...cies]; for (let i = m.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [m[i], m[j]] = [m[j], m[i]]; }
-    const pris = new Set(), res = [];
-    for (const t of TIRAGE) { const c = m.find(x => !pris.has(x.slug) && ok(x, t)); if (!c) break; pris.add(c.slug); res.push({ c, t }); }
-    if (res.length === TIRAGE.length) return res;
-  }
-  return null;
+$("genSave").onclick = async () => {
+  if (!GEN) return;
+  if (!await confirmer(`Enregistrer ces 3 contrats (« Contrat de ${GEN.ville} ») dans les contrats d'exportation ? Ils pourront sortir au tirage de ${GEN.ville} uniquement.`)) return;
+  const contrats = {}; ["petit", "moyen", "gros"].forEach(t => contrats[t] = { prix: GEN.contrats[t].prix, lignes: GEN.contrats[t].lignes });
+  const slug = "gen-" + cleVille(GEN.ville) + "-" + Date.now().toString(36);
+  const { error } = await sb.from("compagnies").insert({ slug, nom: `Contrat de ${GEN.ville}`, contrats, images: "genere", ville: GEN.ville, actif: true, ordre: 5000 });
+  if (error) return flash($("genMsg"), "Non enregistré : " + error.message + (/genere|ville/.test(error.message) ? " (as-tu lancé 40_contrats_generes.sql ?)" : ""), false);
+  flash($("genMsg"), `Contrats de ${GEN.ville} enregistrés ✔ (Réglages > Compagnies pour les désactiver ou les supprimer)`, true);
+  $("genApercu").hidden = true; GEN = null; chargerCompagnies();
+};
+
+// Parchemin dessiné (même gabarit que les visuels des compagnies : 370 × 1414)
+const PARCH_CACHE = new Map();
+function parchemin(titre, c) {
+  const cle = titre + "|" + c.prix + "|" + (c.lignes || []).join(";");
+  if (PARCH_CACHE.has(cle)) return PARCH_CACHE.get(cle);
+  const W = 370, H = 1414, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const x = cv.getContext("2d"), or = "#d9a521", nuit = "#23253a";
+  const g = x.createRadialGradient(W / 2, H * 0.55, 60, W / 2, H * 0.55, H * 0.7); g.addColorStop(0, "#f3e4bf"); g.addColorStop(1, "#d9c08a");
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.globalAlpha = 0.06; for (let i = 0; i < 260; i++) { x.fillStyle = i % 2 ? "#7a5a2a" : "#fff"; x.fillRect(Math.random() * W, Math.random() * H, 1 + Math.random() * 3, 1 + Math.random() * 3); } x.globalAlpha = 1;
+  // bandeau du haut en chevron
+  x.fillStyle = nuit; x.beginPath(); x.moveTo(0, 0); x.lineTo(W, 0); x.lineTo(W, 480); x.lineTo(W / 2, 570); x.lineTo(0, 480); x.closePath(); x.fill();
+  x.strokeStyle = or; x.lineWidth = 5; x.beginPath(); x.moveTo(0, 480); x.lineTo(W / 2, 570); x.lineTo(W, 480); x.stroke();
+  x.textAlign = "center"; x.textBaseline = "middle"; x.fillStyle = or;
+  const mots = titre.split(" "), lignesT = []; let cur = "";
+  x.font = "700 38px Cinzel, Georgia, serif";
+  mots.forEach(m => { const t = cur ? cur + " " + m : m; if (x.measureText(t).width > W - 50 && cur) { lignesT.push(cur); cur = m; } else cur = t; }); if (cur) lignesT.push(cur);
+  lignesT.forEach((l, i) => x.fillText(l, W / 2, 80 + i * 48));
+  // emblème
+  const ey = 340; x.lineWidth = 4; x.beginPath(); x.arc(W / 2, ey, 82, 0, Math.PI * 2); x.stroke(); x.lineWidth = 2; x.beginPath(); x.arc(W / 2, ey, 70, 0, Math.PI * 2); x.stroke();
+  x.font = "700 30px Cinzel, Georgia, serif"; x.fillText("C·E·O", W / 2, ey - 8); x.font = "16px Cinzel, Georgia, serif"; x.fillText("Compagnie", W / 2, ey + 26);
+  // lignes du contrat
+  const lig = (c.lignes || []).map(l => { const m = String(l).match(/^(.*?)\s*[x×]\s*([0-9][0-9 .]*)\s*$/i); return m ? [m[1], m[2]] : [l, ""]; });
+  const bloc = Math.min(120, 380 / Math.max(1, lig.length)), f = Math.min(30, bloc * 0.3);
+  x.fillStyle = "#2b2118";
+  lig.forEach(([nom, q], i) => { const y = 640 + i * bloc;
+    x.font = `700 ${f}px "EB Garamond", Georgia, serif`; x.fillText(nom, W / 2, y, W - 30);
+    x.font = `${f * 0.8}px "EB Garamond", Georgia, serif`; x.fillText("x", W / 2, y + f * 1.05);
+    x.font = `700 ${f}px "EB Garamond", Georgia, serif`; x.fillText(Number(String(q).replace(/[ .]/g, "")).toLocaleString("fr-FR"), W / 2, y + f * 2.1); });
+  // réalisé par
+  x.strokeStyle = "#8a5a2b"; x.lineWidth = 3; x.beginPath(); x.moveTo(40, 1030); x.lineTo(W - 40, 1030); x.stroke();
+  x.fillStyle = "#6b3a1e"; x.font = "600 28px Cinzel, Georgia, serif"; x.fillText("RÉALISÉ PAR", W / 2, 1068);
+  // bandeau du bas : prix
+  x.fillStyle = nuit; x.fillRect(0, H - 86, W, 86); x.strokeStyle = or; x.lineWidth = 4; x.beginPath(); x.moveTo(0, H - 86); x.lineTo(W, H - 86); x.stroke();
+  x.fillStyle = or; x.font = "600 32px Cinzel, Georgia, serif"; x.fillText(`${Number(c.prix).toLocaleString("fr-FR")} Septims`, W / 2, H - 43);
+  x.strokeStyle = or; x.lineWidth = 6; x.strokeRect(3, 3, W - 6, H - 6);
+  const url = cv.toDataURL("image/jpeg", 0.9);
+  PARCH_CACHE.set(cle, url);
+  return url;
 }
-const tiragePossible = ville => !!tirageRentable(ville);
+document.fonts?.load?.('700 38px Cinzel').then(() => PARCH_CACHE.clear()).catch(() => {});
 
 /* ---------- Démarrage ---------- */
 if (SUPABASE_URL.includes("XXXXXXXX")) ecranConnexion("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.", false);

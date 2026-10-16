@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261016a">
+<link rel="stylesheet" href="style.css?v=20261016b">
 </head>
 <body>
 <!-- Connexion -->
@@ -159,25 +159,44 @@
     </div>
   </div>
 
-  <!-- Audit des prix : prix des denrées par ville, rentabilité des contrats -->
+  <!-- Audit des prix : relevé par ville, vue nationale, contrats construits à partir des prix -->
   <div id="viewAud" hidden>
     <div class="card">
-      <h2>Prix des denrées en Bordeciel <span class="hint" id="audProg"></span></h2>
-      <p class="hint" style="margin-top:0">Prix d'achat d'<b>une unité</b> de chaque ressource demandée par les contrats d'exportation, ville par ville. Tu renseignes les prix des villes de ta zone (cases blanches) : c'est enregistré dès que tu quittes la case. La moyenne nationale est calculée sur les villes renseignées. Case vidée = prix effacé.</p>
-      <div class="row" style="margin-bottom:10px;gap:12px">
-        <div style="flex:1;min-width:200px"><input id="audCherche" placeholder="Rechercher une denrée…"></div>
-        <label class="liv"><input type="checkbox" id="audManq"> Seulement les prix manquants de mes villes</label>
+      <h2>Relevé des prix <span class="hint" id="audProg"></span></h2>
+      <p class="hint" style="margin-top:0">Prix d'achat d'<b>une unité</b> dans ta ville. Enregistré dès que tu quittes la case (case vidée = prix effacé). À côté : la moyenne nationale. Un prix de plus d'un mois passe en <span class="aud-vieux">à revérifier</span>.</p>
+      <div class="filters" style="grid-template-columns:1fr 1fr auto">
+        <div><label for="audVille">Ville</label><select id="audVille"></select></div>
+        <div><label for="audCherche">Denrée</label><input id="audCherche" placeholder="Rechercher…"></div>
+        <label class="liv" style="align-self:end;margin-bottom:10px"><input type="checkbox" id="audAFaire"> Seulement à faire</label>
       </div>
       <div class="msg" id="audMsg"></div>
-      <div id="audTable"></div>
+      <div id="audReleve"></div>
     </div>
-    <div class="card" id="audRentaCard" hidden>
-      <h2>Rentabilité des contrats</h2>
-      <p class="hint" style="margin-top:0">Pour chaque ville : coût des ressources du contrat au <b>prix local</b> (à défaut, la moyenne nationale, marquée « ~ ») comparé au prix payé par le contrat. Un contrat est <b>rentable</b> si son prix dépasse ce coût d'au moins la marge ci-dessous. Le tirage des contrats d'exportation ne prend que les contrats rentables pour la ville.</p>
-      <div class="row" style="margin-bottom:10px"><div style="min-width:220px"><label for="audMarge">Marge minimale (%)</label><input type="number" id="audMarge" min="0" step="1"></div>
-        <div style="min-width:220px"><label for="audVille">Détail pour une ville</label><select id="audVille"><option value="">Toutes les villes (résumé)</option></select></div></div>
-      <div class="msg" id="audRentaMsg"></div>
-      <div id="audRenta"></div>
+
+    <div class="card">
+      <h2>Vue nationale</h2>
+      <div id="audVilles" class="aud-villes"></div>
+      <div id="audNat"></div>
+    </div>
+
+    <div class="card" id="audGenCard" hidden>
+      <h2>Construire des contrats</h2>
+      <p class="hint" style="margin-top:0">Pour une ville, le site prend les denrées où elle est <b>moins chère que la moyenne nationale</b> et construit un petit, un moyen et un gros contrat. Prix du contrat = quantités × moyenne nationale : la ville achète au prix local et gagne la différence. Rien n'est enregistré tant que tu n'as pas confirmé.</p>
+      <div class="filters filters4">
+        <div><label for="genVille">Ville</label><select id="genVille"></select></div>
+        <div><label for="genPetit">Valeur petit</label><input type="number" id="genPetit" min="100" step="100" value="4000"></div>
+        <div><label for="genMoyen">Valeur moyen</label><input type="number" id="genMoyen" min="100" step="100" value="12000"></div>
+        <div><label for="genGros">Valeur gros</label><input type="number" id="genGros" min="100" step="100" value="25000"></div>
+      </div>
+      <div class="row"><button type="button" class="btn primary" id="genGo">Construire</button></div>
+      <div class="msg" id="genMsg"></div>
+      <div id="genApercu" hidden>
+        <div class="gen-grille" id="genListe"></div>
+        <div class="row" style="margin-top:12px">
+          <button type="button" class="btn primary" id="genSave">Enregistrer dans les contrats</button>
+          <button type="button" class="btn" id="genRegen">Reconstruire</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -189,7 +208,6 @@
       <div class="row ctr-barre">
         <div><label for="ctrLieu">Ville</label><select id="ctrLieu"></select></div>
         <button type="button" class="btn primary" id="ctrGen">Générer les contrats</button>
-        <label class="liv" title="Tirer parmi toutes les compagnies actives, même non rentables pour la ville"><input type="checkbox" id="ctrForcer"> Ignorer la rentabilité</label>
       </div>
       <div class="msg" id="ctrMsg"></div>
     </div>
@@ -365,6 +383,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261016a"></script>
+<script src="script.js?v=20261016b"></script>
 </body>
 </html>
