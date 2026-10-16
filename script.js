@@ -1961,13 +1961,16 @@ const VIEUX_MS = 30 * 24 * 3600 * 1000;                           // un prix de 
 const vieux = x => x && Date.now() - Date.parse(x.le) > VIEUX_MS;
 
 async function chargerAudit() {
-  const [v, d, p, c] = await Promise.all([sb.rpc("audit_villes"), sb.rpc("audit_denrees"), sb.rpc("audit_prix"), sb.rpc("audit_categories")]);
-  const err = [v, d, p].find(r => r.error);
-  if (err) { flash($("audMsg"), "Audit indisponible : " + err.error.message + (/audit_/.test(err.error.message) ? " (as-tu lancé 39_audit_prix.sql ?)" : ""), false); return false; }
+  const [v, d, p, c, cm, cp] = await Promise.all([sb.rpc("audit_villes"), sb.rpc("audit_denrees"), sb.rpc("audit_prix"), sb.rpc("audit_categories"),
+    sb.rpc("audit_commerces"), sb.rpc("audit_commerce_prix")]);
+  const err = [v, d, p, cm, cp].find(r => r.error);
+  if (err) { flash($("audMsg"), "Audit indisponible : " + err.error.message + (/audit_/.test(err.error.message) ? " (as-tu lancé 39, 41 et 44 ?)" : ""), false); return false; }
   const prix = new Map();
   (p.data || []).forEach(r => { if (!prix.has(r.denree)) prix.set(r.denree, new Map()); prix.get(r.denree).set(r.ville, { prix: Number(r.prix), par: r.maj_par, le: r.maj_le }); });
   const toutes = (d.data || []).map(x => ({ cle: x.denree, nom: x.nom, cat: x.categorie || "Autres", catId: x.categorie_id, catOrdre: x.cat_ordre ?? 999, actif: x.actif !== false }));
-  AUD = { villes: v.data || [], toutes, denrees: toutes.filter(x => x.actif), prix,
+  const cprix = new Map();
+  (cp.data || []).forEach(r => { if (!cprix.has(r.commerce_id)) cprix.set(r.commerce_id, new Map()); cprix.get(r.commerce_id).set(r.denree, { prix: Number(r.prix), par: r.maj_par, le: r.maj_le }); });
+  AUD = { villes: v.data || [], toutes, denrees: toutes.filter(x => x.actif), prix, commerces: cm.data || [], cprix, marge: AUD?.marge ?? 20,
           cats: c.error ? [] : c.data,                       // [{id, nom, ordre}] (41_denrees.sql)
           gere: !c.error };
   if (c.error && estAdmin()) flash($("gereMsg"), "Gestion des denrées indisponible : lance 41_denrees.sql.", false);
@@ -1984,9 +1987,10 @@ function stats(k) {
 
 async function ouvrirAudit() {
   if (!await chargerAudit()) return;
-  const mes = AUD.villes.filter(v => v.a_moi), sv = $("audVille"), g = sv.value;
-  sv.innerHTML = mes.map(v => `<option>${esc(v.ville)}</option>`).join("") || '<option value="">— aucune ville —</option>';
-  if (mes.some(v => v.ville === g)) sv.value = g;
+  const sv = $("audVille"), g = sv.value, villes = [...AUD.villes].sort((a, b) => (b.a_moi - a.a_moi) || a.ville.localeCompare(b.ville, "fr"));
+  sv.innerHTML = villes.map(v => `<option value="${esc(v.ville)}">${esc(v.ville)}${v.a_moi ? "" : " (lecture)"}</option>`).join("");
+  if (villes.some(v => v.ville === g)) sv.value = g;
+  majFiltresCom();
   $("audGenCard").hidden = !estAdmin();
   $("audGereCard").hidden = !estAdmin() || !AUD.gere;
   if (estAdmin() && AUD.gere) renderGere();
@@ -1999,44 +2003,140 @@ async function ouvrirAudit() {
   renderReleve(); renderNational();
 }
 
-// 1. Relevé d'une ville, par catégorie
+// 1. Commerces d'une ville : leurs articles et prix (prix de la ville = moyenne de ses commerces)
+const prixCom = (cid, k) => AUD?.cprix.get(cid)?.get(k) || null;
+const comsVille = v => (AUD?.commerces || []).filter(c => c.ville === v);
+function recalcVille(k, ville) {                                 // moyenne des commerces de la ville pour une denrée
+  const l = comsVille(ville).map(c => prixCom(c.id, k)).filter(Boolean);
+  if (!AUD.prix.has(k)) AUD.prix.set(k, new Map());
+  if (!l.length) { AUD.prix.get(k).delete(ville); return; }
+  const der = l.reduce((a, b) => (Date.parse(a.le) > Date.parse(b.le) ? a : b));
+  AUD.prix.get(k).set(ville, { prix: l.reduce((s, x) => s + x.prix, 0) / l.length, par: der.par, le: der.le });
+}
+function pastilleEcart(prix, k) {
+  const s = stats(k), e = s.n > 1 && s.moy ? (prix - s.moy) / s.moy : null;
+  return e == null ? "" : e <= -0.15 ? '<span class="past bas" title="Nettement moins cher que la moyenne">▼</span> ' : e >= 0.15 ? '<span class="past haut" title="Nettement plus cher que la moyenne">▲</span> ' : "";
+}
+function majFiltresCom() {
+  const ville = $("audVille").value, sc = $("audCom"), gc = sc.value, st = $("audType"), gt = st.value, sk = $("audCat"), gk = sk.value;
+  sc.innerHTML = '<option value="">Tous les commerces</option>' + comsVille(ville).map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("");
+  sc.value = comsVille(ville).some(c => String(c.id) === gc) ? gc : "";
+  const types = [...new Set(AUD.commerces.map(c => c.type).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  st.innerHTML = '<option value="">Tous les types</option>' + types.map(t => `<option>${esc(t)}</option>`).join(""); st.value = types.includes(gt) ? gt : "";
+  $("audTypes").innerHTML = types.map(t => `<option value="${esc(t)}">`).join("");
+  sk.innerHTML = '<option value="">Toutes les catégories</option>' + AUD.cats.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join(""); sk.value = gk;
+  $("audDenList").innerHTML = AUD.denrees.map(d => `<option value="${esc(d.nom)}">`).join("");
+}
 function renderReleve() {
   if (!AUD) return;
-  const ville = $("audVille").value, q = sansAccent($("audCherche").value.trim()), afaire = $("audAFaire").checked;
-  if (!ville) { $("audReleve").innerHTML = '<p class="empty">Tu n\'as aucune ville à relever.</p>'; $("audProg").textContent = ""; return; }
-  const faits = AUD.denrees.filter(d => prixDe(d.cle, ville)).length, aRev = AUD.denrees.filter(d => vieux(prixDe(d.cle, ville))).length;
-  $("audProg").textContent = `— ${ville} : ${faits} / ${AUD.denrees.length} relevés${aRev ? ` · ${aRev} à revérifier` : ""}`;
-  const liste = AUD.denrees.filter(d => (!q || sansAccent(d.nom).includes(q)) && (!afaire || !prixDe(d.cle, ville) || vieux(prixDe(d.cle, ville))));
-  const cats = [...new Set(liste.map(d => d.cat))];          // déjà triées par catégorie (ordre de la base)
-  $("audReleve").innerHTML = cats.length ? cats.map(c => `<h3 class="k-titre">${esc(c)}</h3><div class="releve">${
-    liste.filter(d => d.cat === c).map(d => { const x = prixDe(d.cle, ville), s = stats(d.cle);
-      const ecart = x && s.n > 1 ? (x.prix - s.moy) / s.moy : null;
-      const pastille = ecart == null ? "" : ecart <= -0.15 ? '<span class="past bas" title="Nettement moins cher que la moyenne">▼</span>' : ecart >= 0.15 ? '<span class="past haut" title="Nettement plus cher que la moyenne">▲</span>' : "";
-      return `<div class="rl${vieux(x) ? " vieux" : ""}"><span class="rl-nom">${esc(d.nom)}</span>
-        <input type="number" min="0" step="0.5" value="${x ? x.prix : ""}" data-pd="${esc(d.nom)}" placeholder="prix">
-        <span class="rl-moy">${pastille} moy. ${fmtPrix(s.moy)} <span class="hint">(${s.n}/10)</span></span>
-        <span class="hint rl-date">${x ? (vieux(x) ? '<span class="aud-vieux">à revérifier</span> · ' : "") + new Date(x.le).toLocaleDateString("fr-FR") : ""}</span></div>`; }).join("")}</div>`).join("")
-    : `<p class="empty">${afaire ? `Tout est relevé et à jour pour ${esc(ville)} ✔` : "Aucune denrée ne correspond."}</p>`;
-  $("audReleve").querySelectorAll("[data-pd]").forEach(inp => inp.onchange = async () => {
-    const v = inp.value.trim(), p = v === "" ? null : Number(v.replace(",", "."));
-    if (p != null && !(p >= 0)) { inp.value = ""; return flash($("audMsg"), "Prix invalide.", false); }
+  const ville = $("audVille").value, v = AUD.villes.find(x => x.ville === ville), edit = !!v?.a_moi;
+  const fc = $("audCom").value, ft = $("audType").value, fk = $("audCat").value, q = sansAccent($("audCherche").value.trim()), vx = $("audAFaire").checked;
+  const N = AUD.denrees.length, faits = AUD.denrees.filter(d => prixDe(d.cle, ville)).length;
+  $("audProg").textContent = ville ? `— ${ville} : ${comsVille(ville).length} commerce(s), ${faits} / ${N} denrées relevées` : "";
+  $("audNewCom").hidden = !edit;
+  const coms = comsVille(ville).filter(c => (!fc || String(c.id) === fc) && (!ft || c.type === ft));
+  const optsCat = '<option value="">Catégorie (si nouvelle denrée)</option>' + AUD.cats.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("") + '<option value="+">＋ Nouvelle catégorie…</option>';
+  $("audReleve").innerHTML = coms.length ? coms.map(c => {
+    const arts = [...(AUD.cprix.get(c.id) || new Map())].map(([k, x]) => ({ d: AUD.toutes.find(t => t.cle === k) || { cle: k, nom: k, cat: "Autres", catOrdre: 999 }, x }))
+      .filter(a => (!fk || String(a.d.catId) === fk) && (!q || sansAccent(a.d.nom).includes(q)) && (!vx || vieux(a.x)))
+      .sort((a, b) => a.d.catOrdre - b.d.catOrdre || a.d.cat.localeCompare(b.d.cat, "fr") || a.d.nom.localeCompare(b.d.nom, "fr"));
+    let cur = null, lignes = "";
+    arts.forEach(({ d, x }) => {
+      if (d.cat !== cur) { lignes += `<div class="com-cat">${esc(d.cat)}</div>`; cur = d.cat; }
+      const s = stats(d.cle);
+      lignes += `<div class="rl${vieux(x) ? " vieux" : ""}"><span class="rl-nom">${esc(d.nom)}</span>
+        ${edit ? `<input type="number" min="0" step="0.5" value="${x.prix}" data-cp="${c.id}" data-pd="${esc(d.nom)}">` : `<b class="r">${fmtPrix(x.prix)}</b>`}
+        <span class="rl-moy">${pastilleEcart(x.prix, d.cle)}moy. ${fmtPrix(s.moy)} <span class="hint">(${s.n}/10)</span></span>
+        <span class="hint rl-date">${vieux(x) ? '<span class="aud-vieux">à revérifier</span> · ' : ""}${new Date(x.le).toLocaleDateString("fr-FR")}${edit ? ` <button type="button" class="x" title="Retirer cet article du commerce" data-cx="${c.id}" data-pd="${esc(d.nom)}">×</button>` : ""}</span></div>`;
+    });
+    const nb = AUD.cprix.get(c.id)?.size || 0;
+    return `<div class="com" data-cid="${c.id}">
+      <div class="com-tete"><b>${esc(c.nom)}</b>${c.type ? ` <span class="tag">${esc(c.type)}</span>` : ""} <span class="hint">${nb} article(s)</span>
+        ${edit ? `<span class="com-act"><button type="button" class="btn small" data-com-edit="${c.id}">Modifier</button><button type="button" class="x" title="Supprimer le commerce" data-com-sup="${c.id}">×</button></span>` : ""}</div>
+      ${lignes || `<p class="empty">${nb ? "Aucun article pour ces filtres." : "Aucun article pour l'instant."}</p>`}
+      ${edit ? `<div class="com-add"><input placeholder="Article (ex. Lingot d'acier)" list="audDenList" class="ca-nom"><select class="ca-cat">${optsCat}</select>
+        <input type="number" min="0" step="0.5" placeholder="Prix" class="ca-prix"><button type="button" class="btn small primary ca-go">Ajouter</button></div>` : ""}
+    </div>`; }).join("")
+    : `<p class="empty">${comsVille(ville).length ? "Aucun commerce pour ces filtres." : `Aucun commerce à ${esc(ville || "?")} pour l'instant.${edit ? " Crée le premier ci-dessous." : ""}`}</p>`;
+
+  const apres = (k, msg) => { recalcVille(k, ville); renderReleve(); renderNational(); if (msg) flash($("audMsg"), msg, true); };
+  const err = e => flash($("audMsg"), "Non enregistré : " + e.message + (/commerce/.test(e.message) && /function/.test(e.message) ? " (as-tu lancé 44_commerces.sql ?)" : ""), false);
+  $("audReleve").querySelectorAll("input[data-cp]").forEach(inp => inp.onchange = async () => {
+    const cid = Number(inp.dataset.cp), v = inp.value.trim(), p = v === "" ? null : Number(v.replace(",", "."));
+    if (p != null && !(p >= 0)) return flash($("audMsg"), "Prix invalide.", false);
     inp.classList.add("envoi");
-    const { error } = await sb.rpc("fixer_prix", { nom_: inp.dataset.pd, ville_: ville, prix_: p });
+    const { error } = await sb.rpc("fixer_prix_commerce", { commerce: cid, nom_: inp.dataset.pd, prix_: p, categorie: null });
     inp.classList.remove("envoi");
-    if (error) return flash($("audMsg"), "Non enregistré : " + error.message, false);
+    if (error) return err(error);
     const k = cleDenree(inp.dataset.pd);
-    if (!AUD.prix.has(k)) AUD.prix.set(k, new Map());
-    if (p == null) AUD.prix.get(k).delete(ville); else AUD.prix.get(k).set(ville, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
-    const ligne = inp.closest(".rl"), s = stats(k), x = prixDe(k, ville), ecart = x && s.n > 1 ? (x.prix - s.moy) / s.moy : null;
+    if (p == null) AUD.cprix.get(cid)?.delete(k); else AUD.cprix.get(cid).set(k, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
+    recalcVille(k, ville);
+    if (p == null) { renderReleve(); renderNational(); return; }
+    const ligne = inp.closest(".rl"), s = stats(k);
     ligne.classList.remove("vieux");
-    ligne.querySelector(".rl-moy").innerHTML = (ecart == null ? "" : ecart <= -0.15 ? '<span class="past bas">▼</span> ' : ecart >= 0.15 ? '<span class="past haut">▲</span> ' : "") + `moy. ${fmtPrix(s.moy)} <span class="hint">(${s.n}/10)</span>`;
-    ligne.querySelector(".rl-date").textContent = x ? new Date(x.le).toLocaleDateString("fr-FR") : "";
+    ligne.querySelector(".rl-moy").innerHTML = `${pastilleEcart(p, k)}moy. ${fmtPrix(s.moy)} <span class="hint">(${s.n}/10)</span>`;
     inp.classList.add("ok"); setTimeout(() => inp.classList.remove("ok"), 900);
-    const f = AUD.denrees.filter(d => prixDe(d.cle, ville)).length, ar = AUD.denrees.filter(d => vieux(prixDe(d.cle, ville))).length;
-    $("audProg").textContent = `— ${ville} : ${f} / ${AUD.denrees.length} relevés${ar ? ` · ${ar} à revérifier` : ""}`;
     renderNational();
   });
+  $("audReleve").querySelectorAll("[data-cx]").forEach(b => b.onclick = async () => {
+    const cid = Number(b.dataset.cx);
+    if (!await confirmer(`Retirer « ${b.dataset.pd} » de ce commerce ?`)) return;
+    const { error } = await sb.rpc("fixer_prix_commerce", { commerce: cid, nom_: b.dataset.pd, prix_: null, categorie: null });
+    if (error) return err(error);
+    const k = cleDenree(b.dataset.pd); AUD.cprix.get(cid)?.delete(k); apres(k, `« ${b.dataset.pd} » retiré du commerce.`);
+  });
+  $("audReleve").querySelectorAll(".ca-cat").forEach(sel => sel.onchange = async () => {
+    if (sel.value !== "+") return;
+    const nom = (prompt("Nom de la nouvelle catégorie de denrées :") || "").trim();
+    if (!nom) { sel.value = ""; return; }
+    const { data, error } = await sb.rpc("ajouter_categorie", { nom_: nom });
+    if (error) { sel.value = ""; return err(error); }
+    if (!AUD.cats.some(c => c.id === data)) AUD.cats.push({ id: data, nom, ordre: 900 });
+    sel.insertAdjacentHTML("beforeend", ""); const o = new Option(nom, data); sel.add(o, sel.options[sel.options.length - 1]); sel.value = String(data);
+    majFiltresCom();
+  });
+  $("audReleve").querySelectorAll(".ca-go").forEach(b => b.onclick = async () => {
+    const box = b.closest(".com"), cid = Number(box.dataset.cid), nom = box.querySelector(".ca-nom").value.trim();
+    const p = Number(String(box.querySelector(".ca-prix").value).replace(",", ".")), cat = box.querySelector(".ca-cat").value;
+    if (!nom) return flash($("audMsg"), "Indique l'article.", false);
+    if (box.querySelector(".ca-prix").value === "" || !(p >= 0)) return flash($("audMsg"), "Indique le prix.", false);
+    const k = cleDenree(nom), existe = AUD.toutes.find(d => d.cle === k);
+    b.disabled = true;
+    const { error } = await sb.rpc("fixer_prix_commerce", { commerce: cid, nom_: existe ? existe.nom : nom, prix_: p, categorie: cat && cat !== "+" ? Number(cat) : null });
+    b.disabled = false;
+    if (error) return err(error);
+    if (!existe || !existe.actif) { await chargerAudit(); majFiltresCom(); renderReleve(); renderNational(); renderGere(); return flash($("audMsg"), `« ${nom} » ajouté.`, true); }
+    if (!AUD.cprix.has(cid)) AUD.cprix.set(cid, new Map());
+    AUD.cprix.get(cid).set(k, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
+    apres(k, `« ${existe.nom} » ajouté.`);
+  });
+  $("audReleve").querySelectorAll("[data-com-edit]").forEach(b => b.onclick = async () => {
+    const c = AUD.commerces.find(x => String(x.id) === b.dataset.comEdit);
+    const nom = prompt("Nom du commerce :", c.nom); if (nom === null || !nom.trim()) return;
+    const type = prompt("Type de commerce (ex. Forge, Auberge, Épicerie — facultatif) :", c.type || ""); if (type === null) return;
+    const { error } = await sb.rpc("enregistrer_commerce", { id_: c.id, ville_: c.ville, nom_: nom.trim(), type_: type.trim() });
+    if (error) return err(error);
+    c.nom = nom.trim(); c.type = type.trim(); majFiltresCom(); renderReleve(); flash($("audMsg"), "Commerce modifié.", true);
+  });
+  $("audReleve").querySelectorAll("[data-com-sup]").forEach(b => b.onclick = async () => {
+    const c = AUD.commerces.find(x => String(x.id) === b.dataset.comSup), nb = AUD.cprix.get(c.id)?.size || 0;
+    if (!await confirmer(`Supprimer le commerce « ${c.nom} »${nb ? ` et ses ${nb} prix` : ""} ? C'est définitif.`)) return;
+    const { error } = await sb.rpc("supprimer_commerce", { id_: c.id });
+    if (error) return err(error);
+    const ks = [...(AUD.cprix.get(c.id)?.keys() || [])];
+    AUD.commerces = AUD.commerces.filter(x => x.id !== c.id); AUD.cprix.delete(c.id);
+    ks.forEach(k => recalcVille(k, c.ville)); majFiltresCom(); renderReleve(); renderNational(); flash($("audMsg"), "Commerce supprimé.", true);
+  });
 }
+$("audComAdd").onclick = async () => {
+  const ville = $("audVille").value, nom = $("audComNom").value.trim(), type = $("audComType").value.trim();
+  if (!nom) return flash($("audMsg"), "Indique le nom du commerce.", false);
+  const { data, error } = await sb.rpc("enregistrer_commerce", { id_: null, ville_: ville, nom_: nom, type_: type });
+  if (error) return flash($("audMsg"), "Non créé : " + error.message + (/enregistrer_commerce/.test(error.message) ? " (as-tu lancé 44_commerces.sql ?)" : ""), false);
+  AUD.commerces.push({ id: data, ville, nom, type, a_moi: true }); AUD.cprix.set(data, new Map());
+  $("audComNom").value = ""; $("audComType").value = "";
+  majFiltresCom(); $("audCom").value = String(data); renderReleve(); flash($("audMsg"), `Commerce « ${nom} » créé : ajoute ses articles.`, true);
+};
 
 // 2. Vue nationale : avancement par ville + une ligne par denrée (détail des villes au clic)
 function renderNational() {
@@ -2061,12 +2161,12 @@ function detailNat(d) {
   return `<tr class="nat-det" data-k="${esc(d.cle)}"><td colspan="5"><div class="nat-villes">${AUD.villes.map(v => { const x = prixDe(d.cle, v.ville);
     return `<span class="${x ? (vieux(x) ? "vieux" : "") : "manque"}"><b>${esc(v.ville)}</b> ${x ? fmtPrix(x.prix) : "—"}${x ? ` <span class="hint">${esc(x.par || "")}, ${new Date(x.le).toLocaleDateString("fr-FR")}</span>` : ""}</span>`; }).join("")}</div></td></tr>`;
 }
-$("audVille").onchange = renderReleve;
+$("audVille").onchange = () => { majFiltresCom(); renderReleve(); };
+["audCom", "audType", "audCat", "audAFaire"].forEach(id => $(id).onchange = renderReleve);
 $("audCherche").oninput = renderReleve;
-$("audAFaire").onchange = renderReleve;
 
 // Gestion des denrées et catégories (admin)
-async function rechargerAudit(msg) { if (await chargerAudit()) { renderReleve(); renderNational(); renderGere(); if (msg) flash($("gereMsg"), msg, true); } }
+async function rechargerAudit(msg) { if (await chargerAudit()) { majFiltresCom(); renderReleve(); renderNational(); renderGere(); if (msg) flash($("gereMsg"), msg, true); } }
 const erreurGere = e => flash($("gereMsg"), "Non enregistré : " + e.message, false);
 function renderGere() {
   if (!AUD?.gere) return;
