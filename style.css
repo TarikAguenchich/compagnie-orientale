@@ -334,3 +334,5 @@ table.nat tr.nat-l:hover td{background:var(--soft)}
 .gen-c ul{margin:4px 0;padding-left:18px;font-size:.88rem}
 table.gere input,table.gere select{padding:3px 6px}
 .gere-act{white-space:nowrap}
+.frp-carte.attente{border-color:var(--warn);background:var(--warn-bg)}
+.frp-att{color:var(--warn)}

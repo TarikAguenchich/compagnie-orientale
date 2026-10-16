@@ -150,7 +150,7 @@ function confirmer(txt) {
 let MODE = "enc";   // vue des permanences : "enc" = commandes en cours, "hist" = historique (tout livré)
 function showTab(t) {
   if (!estAdmin() && (t === "cat" || t === "reg" || t === "ctr" || t === "cpt")) t = "perm";
-  if (t === "frp" && !estFrappeur()) t = "perm";
+  if (t === "frp" && !(estFrappeur() || estZone())) t = "perm";
   const vues = { perm: "viewPerm", enc: "viewHist", hist: "viewHist", stock: "viewStock", frp: "viewFrp", aud: "viewAud", ctr: "viewCtr", cpt: "viewCpt", cat: "viewCat", reg: "viewReg" };
   ["viewPerm", "viewHist", "viewStock", "viewFrp", "viewAud", "viewCtr", "viewCpt", "viewCat", "viewReg"].forEach(v => $(v).hidden = v !== vues[t]);
   if (t === "ctr") { majLieuxContrats(); chargerCompagnies(); chargerSuivi(); }
@@ -1583,7 +1583,7 @@ function demarrer() {
   $("secHint").hidden = !estSecretaire();
   if (PROFIL?.avatar) { $("userAvatar").src = PROFIL.avatar; $("userAvatar").hidden = false; }
   $("tabCat").hidden = $("tabReg").hidden = $("tabCtr").hidden = $("tabCpt").hidden = !estAdmin();
-  $("tabFrp").hidden = !estFrappeur();
+  $("tabFrp").hidden = !(estFrappeur() || estZone());
   $("tabAud").hidden = !(estAdmin() || estZone());
   $("sIntWrap").hidden = !estAdmin();
   $("fIntWrap").hidden = $("fLieuWrap").hidden = !estAdmin();
@@ -1667,12 +1667,12 @@ function renderCompta() {
     const tout = KJ.filter(r => r.zone_id === z), p = per.filter(r => r.zone_id === z);
     const solde = tout.reduce((s, r) => s + r.montant, 0);
     const ent = p.filter(r => r.montant > 0).reduce((s, r) => s + r.montant, 0), sor = p.filter(r => r.montant < 0).reduce((s, r) => s - r.montant, 0);
-    const inv = inventaire(tout), loy = KLOY.find(x => x.zone_id === z), f = z != null ? frappeSemaine(z) : null;
+    const inv = inventaire(tout), loy = KLOY.find(x => x.zone_id === z);
     return `<div class="k-coffre"><div class="k-z">${esc(nomZone(z))}</div>
       <div class="k-solde${solde < 0 ? " neg" : ""}">${septimsNeg(solde)}</div>
       <div class="k-es"><span class="pos">▲ ${fmt(ent)}</span><span class="neg">▼ ${fmt(sor)}</span><span class="hint">${esc(libPer)}</span></div>
       ${z != null ? `<div class="hint">Loyer : ${loy && loy.montant ? fmt(loy.montant) + " / semaine" : "aucun"}</div>
-        <div class="hint">Frappe cette semaine : ${f ? fmt(f) : "aucune"}</div>`
+`
         : `<div class="hint">Permanences dont la zone est introuvable (coffre / châtellerie sans zone)</div>`}
       <div class="k-inv"><div class="k-invt">Objets dans le coffre</div>${inv.length
         ? inv.map(e => `<div><span>${esc(e.nom)}</span><b${e.q < 0 ? ' class="neg"' : ""}>${e.q < 0 ? "−" : ""}${Math.abs(e.q).toLocaleString("fr-FR")}</b></div>`).join("")
@@ -1774,7 +1774,7 @@ function statsCompta(per, zf) {
     const x = parZone[0];
     html = `<div class="k-tuiles">
       ${tuile("Encaissé", fmt(x.enc), x.nbCmd + " commande(s) payée(s)")}
-      ${tuile("Dépensé", fmt(x.sorti), `contrats ${fmt(x.ctr)} · frappe ${fmt(x.fra)} · loyers ${fmt(x.loy)}`)}
+      ${tuile("Dépensé", fmt(x.sorti), `contrats ${fmt(x.ctr)} · loyers ${fmt(x.loy)}`)}
       ${tuile("Résultat", septimsSigne(x.net), "sur la période")}
       ${tuile("Contrats réalisés", String(x.nbCtr), fmt(x.ctr) + " payés")}
     </div>`;
@@ -1785,19 +1785,18 @@ function statsCompta(per, zf) {
       ${tuile("A le plus encaissé", t.enc.enc ? "Zone " + t.enc.z : "", fmt(t.enc.enc))}
       ${tuile("A le plus dépensé", t.sorti.sorti ? "Zone " + t.sorti.z : "", fmt(t.sorti.sorti))}
       ${tuile("Meilleur résultat", t.net.net ? "Zone " + t.net.z : "", septimsSigne(t.net.net))}
-      ${tuile("A le plus frappé", t.fra.fra ? "Zone " + t.fra.z : "", fmt(t.fra.fra))}
       ${tuile("Le plus de contrats", t.nbCtr.nbCtr ? "Zone " + t.nbCtr.z : "", t.nbCtr.nbCtr + " contrat(s)")}
     </div>`;
   }
   const maxES = Math.max(...parZone.map(x => Math.max(x.enc, x.sorti)), 0);
   html += `<h3 class="k-titre">Encaissé et dépensé${zf ? "" : " par zone"}</h3>
-    <p class="k-leg"><span class="k-pt pos"></span> encaissé (commandes payées) <span class="k-pt neg"></span> dépensé (contrats + frappe + loyers + retraits)</p>
+    <p class="k-leg"><span class="k-pt pos"></span> encaissé (commandes payées) <span class="k-pt neg"></span> dépensé (contrats + loyers + retraits)</p>
     ${parZone.map(x => `<div class="k-zbloc"><div class="k-zn">Zone ${x.z} <span class="hint">· résultat ${septimsSigne(x.net)}</span></div>
       ${barresK([{ lib: "Encaissé", v: x.enc, txt: fmt(x.enc), cl: "pos", titre: `${x.nbCmd} commande(s) payée(s)` },
-                 { lib: "Dépensé", v: x.sorti, txt: fmt(x.sorti), cl: "neg", titre: `Contrats ${fmt(x.ctr)} · frappe ${fmt(x.fra)} · loyers ${fmt(x.loy)}` }], maxES)}</div>`).join("")}`;
+                 { lib: "Dépensé", v: x.sorti, txt: fmt(x.sorti), cl: "neg", titre: `Contrats ${fmt(x.ctr)} · loyers ${fmt(x.loy)}` }], maxES)}</div>`).join("")}`;
   const neg = v => v ? "−" + fmt(v) : "—";
-  html += `<div class="k-table"><table class="k-jr k-recap"><thead><tr><th>Zone</th><th class="r">Commandes</th><th class="r">Contrats</th><th class="r">Frappe</th><th class="r">Loyers</th><th class="r">Manuels</th><th class="r">Résultat</th></tr></thead><tbody>${
-    parZone.map(x => `<tr><td>Zone ${x.z}</td><td class="r">${fmt(x.enc)}</td><td class="r">${neg(x.ctr)}</td><td class="r">${neg(x.fra)}</td><td class="r">${neg(x.loy)}</td><td class="r">${x.man ? septimsSigne(x.man) : "—"}</td><td class="r ${x.net > 0 ? "pos" : x.net < 0 ? "neg" : ""}">${septimsSigne(x.net)}</td></tr>`).join("")}</tbody></table></div>`;
+  html += `<div class="k-table"><table class="k-jr k-recap"><thead><tr><th>Zone</th><th class="r">Commandes</th><th class="r">Contrats</th><th class="r">Loyers</th><th class="r">Manuels</th><th class="r">Résultat</th></tr></thead><tbody>${
+    parZone.map(x => `<tr><td>Zone ${x.z}</td><td class="r">${fmt(x.enc)}</td><td class="r">${neg(x.ctr)}</td><td class="r">${neg(x.loy)}</td><td class="r">${x.man ? septimsSigne(x.man) : "—"}</td><td class="r ${x.net > 0 ? "pos" : x.net < 0 ? "neg" : ""}">${septimsSigne(x.net)}</td></tr>`).join("")}</tbody></table></div>`;
 
   // Articles, clients, objets reçus
   const art = new Map(), cli = new Map();
@@ -1887,27 +1886,40 @@ function renderFrappes() {
     .map(n => `<option value="${n}" ${n === sel ? "selected" : ""}>${n.toLocaleString("fr-FR")}</option>`).join("");
   $("frpListe").innerHTML = FRP.chats.length ? `<div class="frp-grille">${FRP.chats.map(c => {
     const d = FRP.liste.find(x => x.chatellerie === c.chatellerie && x.semaine === sem), s = d ? d.septims : FRP_MAX, l = lingotsFrappe(s);
-    return `<div class="frp-carte${d ? " faite" : ""}" data-ch="${esc(c.chatellerie)}">
+    const faite = !!d?.effectuee_le, saisie = modifiable && (!faite || estAdmin());
+    return `<div class="frp-carte${faite ? " faite" : d ? " attente" : ""}" data-ch="${esc(c.chatellerie)}">
       <div class="frp-tete"><b>${esc(c.chatellerie)}</b><span class="hint">Zone ${c.zone_id}</span></div>
-      ${d ? `<div class="frp-ok">✔ Frappe déclarée : <b>${fmt(d.septims)}</b><br><span class="hint">${d.lingots_or} lingots d'or · ${d.lingots_argent} lingots d'argent · par ${esc(d.declare_par || "?")} le ${new Date(d.declare_le).toLocaleString("fr-FR")}</span></div>`
+      ${d ? `<div class="${faite ? "frp-ok" : "frp-att"}">${faite ? "✔ Frappe effectuée" : "⏳ Lingots déposés, en attente de frappe"} : <b>${fmt(d.septims)}</b><br>
+          <span class="hint">${d.lingots_or} lingots d'or · ${d.lingots_argent} lingots d'argent · déclarée par ${esc(d.declare_par || "?")} le ${new Date(d.declare_le).toLocaleString("fr-FR")}${
+            faite ? `<br>frappée par ${esc(d.effectuee_par || "?")} le ${new Date(d.effectuee_le).toLocaleString("fr-FR")}` : ""}</span></div>`
           : `<div class="hint">${courante ? "Pas encore de frappe cette semaine." : "Aucune frappe cette semaine-là."}</div>`}
-      ${modifiable ? `<div class="frp-saisie"><label>Septims à frapper</label><select class="frp-s">${options(s)}</select>
-        <div class="frp-besoin">Il faut <b class="frp-or">${l.or}</b> lingots d'or et <b class="frp-arg">${l.arg}</b> lingots d'argent</div>
-        <div class="row"><button type="button" class="btn ${d ? "" : "primary"} small frp-go">${d ? "Corriger" : "Déclarer la frappe"}</button>
-        ${d ? `<button type="button" class="btn small frp-del" data-id="${d.id}">Annuler</button>` : ""}</div></div>` : ""}
+      ${saisie ? `<div class="frp-saisie"><label>Septims à frapper</label><select class="frp-s">${options(s)}</select>
+        <div class="frp-besoin">Il faut <b class="frp-or">${l.or}</b> lingots d'or et <b class="frp-arg">${l.arg}</b> lingots d'argent</div></div>` : ""}
+      <div class="row">${saisie ? `<button type="button" class="btn ${d ? "" : "primary"} small frp-go">${d ? "Corriger" : "Déclarer la frappe"}</button>` : ""}
+        ${d && saisie ? `<button type="button" class="btn small frp-del" data-id="${d.id}">Annuler</button>` : ""}
+        ${d && estFrappeur() ? (faite ? `<button type="button" class="btn small frp-fait" data-id="${d.id}" data-v="0">Remettre en attente</button>`
+                                      : `<button type="button" class="btn primary small frp-fait" data-id="${d.id}" data-v="1">Frappe effectuée</button>`) : ""}</div>
     </div>`;
-  }).join("")}</div>` : '<p class="empty">La frappe est gérée par l\'intendant de la zone 1 et les administrateurs.</p>';
+  }).join("")}</div>` : '<p class="empty">Aucune châtellerie : tu n\'es affecté(e) à aucune zone.</p>';
+  $("frpListe").querySelectorAll(".frp-fait").forEach(b => b.onclick = async () => {
+    const card = b.closest(".frp-carte"), faite = b.dataset.v === "1";
+    if (faite && !await confirmer(`${card.dataset.ch} : la monnaie a bien été frappée ?`)) return;
+    b.disabled = true;
+    const { error } = await sb.rpc("frappe_effectuee", { frappe: Number(b.dataset.id), faite });
+    if (error) { b.disabled = false; return flash($("frpMsg"), "Non enregistré : " + error.message + (/frappe_effectuee/.test(error.message) ? " (as-tu lancé 43_frappe_declaration.sql ?)" : ""), false); }
+    flash($("frpMsg"), `${card.dataset.ch} : ${faite ? "frappe effectuée ✔" : "remise en attente."}`, true); chargerFrappes();
+  });
   $("frpListe").querySelectorAll(".frp-carte").forEach(card => {
     const sel = card.querySelector(".frp-s"); if (!sel) return;
     sel.onchange = () => { const l = lingotsFrappe(Number(sel.value)); card.querySelector(".frp-or").textContent = l.or; card.querySelector(".frp-arg").textContent = l.arg; };
     card.querySelector(".frp-go").onclick = async e => {
       const ch = card.dataset.ch, s = Number(sel.value), l = lingotsFrappe(s);
-      if (!await confirmer(`${ch} : frapper ${fmt(s)} contre ${l.or} lingots d'or et ${l.arg} lingots d'argent (semaine du ${lundi.toLocaleDateString("fr-FR")}) ?`)) return;
+      if (!await confirmer(`${ch} : ${l.or} lingots d'or et ${l.arg} lingots d'argent sont déposés dans le tonneau d'exportation de l'entrepôt, pour frapper ${fmt(s)} ? La zone 1 sera prévenue sur Discord.`)) return;
       e.target.disabled = true;
       const { error } = await sb.rpc("declarer_frappe", { chatellerie_: ch, septims_: s, semaine_: sem });
       e.target.disabled = false;
       if (error) return flash($("frpMsg"), "Non enregistré : " + error.message, false);
-      flash($("frpMsg"), `${ch} : frappe de ${fmt(s)} enregistrée ✔`, true); chargerFrappes();
+      flash($("frpMsg"), `${ch} : frappe de ${fmt(s)} déclarée ✔ La zone 1 est prévenue.`, true); chargerFrappes();
     };
     const del = card.querySelector(".frp-del");
     if (del) del.onclick = async () => {
@@ -1921,12 +1933,13 @@ function renderFrappes() {
   const fc = $("frpFiltre").value, h = FRP.liste.filter(x => !fc || x.chatellerie === fc);
   const tot = h.reduce((a, x) => ({ s: a.s + x.septims, o: a.o + x.lingots_or, g: a.g + x.lingots_argent }), { s: 0, o: 0, g: 0 });
   $("frpNb").textContent = h.length;
-  $("frpHist").innerHTML = h.length ? `<div class="k-table"><table class="k-jr"><thead><tr><th>Semaine</th><th>Châtellerie</th><th class="r">Septims</th><th class="r">Or</th><th class="r">Argent</th><th>Déclarée par</th>${estAdmin() ? "<th></th>" : ""}</tr></thead><tbody>${
+  $("frpHist").innerHTML = h.length ? `<div class="k-table"><table class="k-jr"><thead><tr><th>Semaine</th><th>Châtellerie</th><th class="r">Septims</th><th class="r">Or</th><th class="r">Argent</th><th>Déclarée par</th><th>État</th>${estAdmin() ? "<th></th>" : ""}</tr></thead><tbody>${
     h.map(x => `<tr><td>${new Date(x.semaine + "T00:00").toLocaleDateString("fr-FR")}</td><td>${esc(x.chatellerie)} <span class="hint">· zone ${x.zone_id}</span></td>
       <td class="r">${fmt(x.septims)}</td><td class="r">${x.lingots_or}</td><td class="r">${x.lingots_argent}</td>
       <td class="hint">${esc(x.declare_par || "?")} · ${new Date(x.declare_le).toLocaleDateString("fr-FR")}</td>
+      <td>${x.effectuee_le ? '<span class="tag ok">frappée</span>' : '<span class="tag orange">en attente</span>'}</td>
       ${estAdmin() ? `<td><button type="button" class="x" title="Supprimer cette frappe" data-frp="${x.id}">×</button></td>` : ""}</tr>`).join("")}
-    <tr class="frp-tot"><td colspan="2"><b>Total</b></td><td class="r">${fmt(tot.s)}</td><td class="r">${tot.o}</td><td class="r">${tot.g}</td><td></td>${estAdmin() ? "<td></td>" : ""}</tr></tbody></table></div>`
+    <tr class="frp-tot"><td colspan="2"><b>Total</b></td><td class="r">${fmt(tot.s)}</td><td class="r">${tot.o}</td><td class="r">${tot.g}</td><td></td><td></td>${estAdmin() ? "<td></td>" : ""}</tr></tbody></table></div>`
     : '<p class="empty">Aucune frappe déclarée.</p>';
   $("frpHist").querySelectorAll("[data-frp]").forEach(b => b.onclick = async () => {
     if (!await confirmer("Supprimer cette frappe ?")) return;
@@ -1979,6 +1992,7 @@ async function ouvrirAudit() {
   if (estAdmin() && AUD.gere) renderGere();
   if (estAdmin()) {
     if (!COMPAGNIES.length) await chargerCompagnies();
+    const mg = await sb.rpc("audit_marge"); AUD.marge = mg.error ? 20 : Number(mg.data ?? 20); $("genMarge").value = AUD.marge;
     const gv = $("genVille"), gg = gv.value;
     gv.innerHTML = AUD.villes.map(v => `<option>${esc(v.ville)}</option>`).join(""); if (gg) gv.value = gg;
   }
@@ -2116,16 +2130,15 @@ function construireContrats(ville) {
     .map(c => ({ ...c, gain: (c.moy - c.local) / c.moy }))
     .sort((a, b) => b.gain - a.gain);
   if (!cand.length) return { erreur: `Aucune denrée moins chère que la moyenne nationale à ${ville} (il faut le prix de ${ville} et d'au moins une autre ville).` };
-  const cibles = { petit: Number($("genPetit").value) || 4000, moyen: Number($("genMoyen").value) || 12000, gros: Number($("genGros").value) || 25000 };
+  const cibles = { petit: 4000, moyen: 12000, gros: 25000 }, marge = (Number($("genMarge").value) || 0) / 100;   // taille visée (valeur au prix national)
   const nbLignes = { petit: [1, 2], moyen: [2, 3], gros: [3, 4] }, contrats = {};
   for (const t of ["petit", "moyen", "gros"]) {
     const top = cand.slice(0, Math.max(6, nbLignes[t][1])).sort(() => Math.random() - 0.5);
     const n = Math.min(cand.length, nbLignes[t][0] + Math.floor(Math.random() * (nbLignes[t][1] - nbLignes[t][0] + 1)));
     const pris = top.slice(0, n);
     let lignes = pris.map(c => ({ c, qte: arrondiQte(cibles[t] / n / c.moy) }));
-    const valeur = lignes.reduce((s, l) => s + l.qte * l.c.moy, 0), cout = lignes.reduce((s, l) => s + l.qte * l.c.local, 0);
-    let prix = Math.round(valeur / 50) * 50;
-    if (prix <= cout) prix = Math.ceil(cout * 1.05 / 50) * 50;
+    const cout = lignes.reduce((s, l) => s + l.qte * l.c.local, 0);
+    const prix = Math.max(50, Math.round(cout * (1 + marge) / 50) * 50);        // prix = coût à la ville + marge
     contrats[t] = { prix, lignes: lignes.map(l => `${l.c.d.nom} x ${l.qte}`), detail: lignes, cout, benef: prix - cout };
   }
   return { ville, contrats };
@@ -2141,6 +2154,9 @@ function renderGen() {
 }
 $("genGo").onclick = $("genRegen").onclick = async () => {
   if (!AUD) await chargerAudit();
+  const m = Number($("genMarge").value);
+  if (!(m >= 0)) return flash($("genMsg"), "Marge invalide.", false);
+  if (m !== AUD.marge) { const { error } = await sb.rpc("fixer_marge", { marge: m }); if (!error) AUD.marge = m; }
   const r = construireContrats($("genVille").value);
   if (r.erreur) { $("genApercu").hidden = true; return flash($("genMsg"), r.erreur, false); }
   GEN = r; $("genMsg").className = "msg"; renderGen();

@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261016d">
+<link rel="stylesheet" href="style.css?v=20261016e">
 </head>
 <body>
 <!-- Connexion -->
@@ -147,7 +147,8 @@
     <div class="card">
       <h2>Frappe de septims <span class="hint" id="frpSemLib"></span></h2>
       <p class="hint" style="margin-top:0">Une frappe par châtellerie et par semaine (du lundi au dimanche), <b>20 000 septims au maximum</b>.
-      Il faut <b>10 lingots d'or et 5 lingots d'argent pour 500 septims</b> (20 000 septims = 400 or + 200 argent). Le coffre de la zone paie les septims et reçoit les lingots.</p>
+      Il faut <b>10 lingots d'or et 5 lingots d'argent pour 500 septims</b> (20 000 septims = 400 or + 200 argent).<br>
+      Dépose les lingots dans le <b>tonneau d'exportation de l'entrepôt</b> puis clique « Déclarer la frappe » : la zone 1 est prévenue sur Discord et confirme « Frappe effectuée » une fois la monnaie frappée. La frappe n'entre pas dans la compta.</p>
       <div class="row" id="frpSemWrap" style="display:none;margin-bottom:10px"><div class="frp-sem"><label for="frpSem">Semaine <span class="hint">(admin)</span></label><div class="row"><button type="button" class="btn small" id="frpPrec" title="Semaine précédente">◀</button><select id="frpSem"></select><button type="button" class="btn small" id="frpSuiv" title="Semaine suivante">▶</button></div></div></div>
       <div class="msg" id="frpMsg"></div>
       <div id="frpListe"></div>
@@ -194,12 +195,10 @@
 
     <div class="card" id="audGenCard" hidden>
       <h2>Construire des contrats</h2>
-      <p class="hint" style="margin-top:0">Pour une ville, le site prend les denrées où elle est <b>moins chère que la moyenne nationale</b> et construit un petit, un moyen et un gros contrat. Prix du contrat = quantités × moyenne nationale : la ville achète au prix local et gagne la différence. Rien n'est enregistré tant que tu n'as pas confirmé.</p>
-      <div class="filters filters4">
+      <p class="hint" style="margin-top:0">Pour une ville, le site prend les denrées où elle est <b>moins chère que la moyenne nationale</b> et construit un petit, un moyen et un gros contrat. Prix du contrat = coût des ressources au prix de la ville + la <b>marge</b> : c'est le bénéfice de la châtellerie qui le réalise. Rien n'est enregistré tant que tu n'as pas confirmé.</p>
+      <div class="filters">
         <div><label for="genVille">Ville</label><select id="genVille"></select></div>
-        <div><label for="genPetit">Valeur petit</label><input type="number" id="genPetit" min="100" step="100" value="4000"></div>
-        <div><label for="genMoyen">Valeur moyen</label><input type="number" id="genMoyen" min="100" step="100" value="12000"></div>
-        <div><label for="genGros">Valeur gros</label><input type="number" id="genGros" min="100" step="100" value="25000"></div>
+        <div><label for="genMarge">Marge de la châtellerie (%)</label><input type="number" id="genMarge" min="0" step="1" value="20"></div>
       </div>
       <div class="row"><button type="button" class="btn primary" id="genGo">Construire</button></div>
       <div class="msg" id="genMsg"></div>
@@ -396,6 +395,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261016d"></script>
+<script src="script.js?v=20261016e"></script>
 </body>
 </html>
