@@ -1987,10 +1987,8 @@ function stats(k) {
 
 async function ouvrirAudit() {
   if (!await chargerAudit()) return;
-  const sv = $("audVille"), g = sv.value, villes = [...AUD.villes].sort((a, b) => (b.a_moi - a.a_moi) || a.ville.localeCompare(b.ville, "fr"));
-  sv.innerHTML = villes.map(v => `<option value="${esc(v.ville)}">${esc(v.ville)}${v.a_moi ? "" : " (lecture)"}</option>`).join("");
-  if (villes.some(v => v.ville === g)) sv.value = g;
   majFiltresCom();
+  $("audNatCard").hidden = !estAdmin();
   $("audGenCard").hidden = !estAdmin();
   $("audGereCard").hidden = !estAdmin() || !AUD.gere;
   if (estAdmin() && AUD.gere) renderGere();
@@ -2003,10 +2001,12 @@ async function ouvrirAudit() {
   renderReleve(); renderNational();
 }
 
-// 1. Commerces d'une ville : leurs articles et prix (prix de la ville = moyenne de ses commerces)
+// 1. Commerces de ma zone : région → localisation → commerce → produits et prix
 const prixCom = (cid, k) => AUD?.cprix.get(cid)?.get(k) || null;
 const comsVille = v => (AUD?.commerces || []).filter(c => c.ville === v);
-function recalcVille(k, ville) {                                 // moyenne des commerces de la ville pour une denrée
+const mesVilles = () => (AUD?.villes || []).filter(v => estAdmin() || v.a_moi).map(v => v.ville);
+const locsVille = v => [...new Set(comsVille(v).map(c => c.localisation).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+function recalcVille(k, ville) {
   const l = comsVille(ville).map(c => prixCom(c.id, k)).filter(Boolean);
   if (!AUD.prix.has(k)) AUD.prix.set(k, new Map());
   if (!l.length) { AUD.prix.get(k).delete(ville); return; }
@@ -2017,25 +2017,68 @@ function pastilleEcart(prix, k) {
   const s = stats(k), e = s.n > 1 && s.moy ? (prix - s.moy) / s.moy : null;
   return e == null ? "" : e <= -0.15 ? '<span class="past bas" title="Nettement moins cher que la moyenne">▼</span> ' : e >= 0.15 ? '<span class="past haut" title="Nettement plus cher que la moyenne">▲</span> ' : "";
 }
+const NOUVELLE = "__nouvelle__";
+function remplirLocs(sel, ville, garde, avecTous) {
+  const l = locsVille(ville);
+  sel.innerHTML = (avecTous ? '<option value="">Toutes les localisations</option>' : '<option value="">— Région entière / non précisée —</option>')
+    + l.map(x => `<option>${esc(x)}</option>`).join("") + (avecTous ? "" : `<option value="${NOUVELLE}">＋ Ajouter une localisation…</option>`);
+  sel.value = l.includes(garde) ? garde : "";
+}
 function majFiltresCom() {
-  const ville = $("audVille").value, sc = $("audCom"), gc = sc.value, st = $("audType"), gt = st.value, sk = $("audCat"), gk = sk.value;
-  sc.innerHTML = '<option value="">Tous les commerces</option>' + comsVille(ville).map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("");
-  sc.value = comsVille(ville).some(c => String(c.id) === gc) ? gc : "";
-  const types = [...new Set(AUD.commerces.map(c => c.type).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
-  st.innerHTML = '<option value="">Tous les types</option>' + types.map(t => `<option>${esc(t)}</option>`).join(""); st.value = types.includes(gt) ? gt : "";
+  const villes = mesVilles();
+  for (const id of ["audVille", "ncRegion"]) { const s = $(id), g = s.value; s.innerHTML = villes.map(v => `<option>${esc(v)}</option>`).join("") || '<option value="">— aucune région —</option>'; if (villes.includes(g)) s.value = g; }
+  const ville = $("audVille").value;
+  remplirLocs($("audLoc"), ville, $("audLoc").value, true);
+  remplirLocs($("ncLoc"), $("ncRegion").value, $("ncLoc").value, false);
+  const loc = $("audLoc").value, sc = $("audCom"), gc = sc.value;
+  const cs = comsVille(ville).filter(c => !loc || c.localisation === loc);
+  sc.innerHTML = '<option value="">Tous les commerces</option>' + cs.map(c => `<option value="${c.id}">${esc(c.nom)}${!loc && c.localisation ? " — " + esc(c.localisation) : ""}</option>`).join("");
+  sc.value = cs.some(c => String(c.id) === gc) ? gc : "";
+  const st = $("audType"), gt = st.value, types = [...new Set(AUD.commerces.map(c => c.type).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  st.innerHTML = '<option value="">Tous les concepts</option>' + types.map(t => `<option>${esc(t)}</option>`).join(""); st.value = types.includes(gt) ? gt : "";
   $("audTypes").innerHTML = types.map(t => `<option value="${esc(t)}">`).join("");
+  const sk = $("audCat"), gk = sk.value;
   sk.innerHTML = '<option value="">Toutes les catégories</option>' + AUD.cats.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join(""); sk.value = gk;
   $("audDenList").innerHTML = AUD.denrees.map(d => `<option value="${esc(d.nom)}">`).join("");
 }
+// liste déroulante de recherche d'un produit, avec « ＋ Ajouter un produit »
+function comboProduit(box) {
+  const inp = box.querySelector(".ca-nom"), list = box.querySelector(".ca-list"), cat = box.querySelector(".ca-cat");
+  let res = [], idx = -1;
+  const montrer = () => {
+    const q = sansAccent(inp.value.trim()), mots = q.split(/\s+/).filter(Boolean);
+    res = AUD.denrees.filter(d => mots.every(m => sansAccent(d.nom + " " + d.cat).includes(m))).slice(0, 40);
+    const exact = res.some(d => sansAccent(d.nom) === q);
+    idx = res.length ? 0 : -1;
+    list.innerHTML = res.map((d, i) => `<div class="combo-opt${i === idx ? " on" : ""}" data-i="${i}"><span>${esc(d.nom)}</span><span class="hint">${esc(d.cat)}</span></div>`).join("")
+      + (q && !exact ? `<div class="combo-opt combo-nouveau" data-i="new">＋ Ajouter « ${esc(inp.value.trim())} » comme nouveau produit</div>` : "")
+      + (!res.length && !q ? '<div class="combo-vide">Tape le nom du produit…</div>' : "");
+    list.hidden = false;
+  };
+  const choisir = i => {
+    if (i === "new") { cat.hidden = false; cat.focus(); inp.dataset.nouveau = "1"; }
+    else { inp.value = res[i].nom; cat.hidden = true; delete inp.dataset.nouveau; box.querySelector(".ca-prix").focus(); }
+    list.hidden = true;
+  };
+  inp.onfocus = montrer; inp.oninput = () => { cat.hidden = true; delete inp.dataset.nouveau; montrer(); };
+  inp.onkeydown = e => {
+    const opts = [...list.querySelectorAll(".combo-opt")];
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); if (!opts.length) return; idx = (idx + (e.key === "ArrowDown" ? 1 : -1) + opts.length) % opts.length; opts.forEach((o, j) => o.classList.toggle("on", j === idx)); }
+    else if (e.key === "Enter") { e.preventDefault(); const o = opts[idx]; if (o && !list.hidden) choisir(o.dataset.i === "new" ? "new" : +o.dataset.i); }
+    else if (e.key === "Escape") list.hidden = true;
+  };
+  inp.onblur = () => setTimeout(() => { list.hidden = true; }, 150);
+  list.onmousedown = e => e.preventDefault();
+  list.onclick = e => { const o = e.target.closest(".combo-opt"); if (o) choisir(o.dataset.i === "new" ? "new" : +o.dataset.i); };
+}
 function renderReleve() {
   if (!AUD) return;
-  const ville = $("audVille").value, v = AUD.villes.find(x => x.ville === ville), edit = !!v?.a_moi;
-  const fc = $("audCom").value, ft = $("audType").value, fk = $("audCat").value, q = sansAccent($("audCherche").value.trim()), vx = $("audAFaire").checked;
+  const ville = $("audVille").value, loc = $("audLoc").value, fc = $("audCom").value, ft = $("audType").value, fk = $("audCat").value;
+  const q = sansAccent($("audCherche").value.trim()), vx = $("audAFaire").checked;
   const N = AUD.denrees.length, faits = AUD.denrees.filter(d => prixDe(d.cle, ville)).length;
-  $("audProg").textContent = ville ? `— ${ville} : ${comsVille(ville).length} commerce(s), ${faits} / ${N} denrées relevées` : "";
-  $("audNewCom").hidden = !edit;
-  const coms = comsVille(ville).filter(c => (!fc || String(c.id) === fc) && (!ft || c.type === ft));
-  const optsCat = '<option value="">Catégorie (si nouvelle denrée)</option>' + AUD.cats.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("") + '<option value="+">＋ Nouvelle catégorie…</option>';
+  $("audProg").textContent = ville ? `— ${ville} : ${comsVille(ville).length} commerce(s), ${faits} / ${N} produits relevés` : "";
+  const coms = comsVille(ville).filter(c => (!loc || c.localisation === loc) && (!fc || String(c.id) === fc) && (!ft || c.type === ft));
+  const optsCat = '<option value="">Catégorie du nouveau produit…</option>' + AUD.cats.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("") + `<option value="${NOUVELLE}">＋ Nouvelle catégorie…</option>`;
   $("audReleve").innerHTML = coms.length ? coms.map(c => {
     const arts = [...(AUD.cprix.get(c.id) || new Map())].map(([k, x]) => ({ d: AUD.toutes.find(t => t.cle === k) || { cle: k, nom: k, cat: "Autres", catOrdre: 999 }, x }))
       .filter(a => (!fk || String(a.d.catId) === fk) && (!q || sansAccent(a.d.nom).includes(q)) && (!vx || vieux(a.x)))
@@ -2044,79 +2087,93 @@ function renderReleve() {
     arts.forEach(({ d, x }) => {
       if (d.cat !== cur) { lignes += `<div class="com-cat">${esc(d.cat)}</div>`; cur = d.cat; }
       const s = stats(d.cle);
-      lignes += `<div class="rl${vieux(x) ? " vieux" : ""}"><span class="rl-nom">${esc(d.nom)}</span>
-        ${edit ? `<input type="number" min="0" step="0.5" value="${x.prix}" data-cp="${c.id}" data-pd="${esc(d.nom)}">` : `<b class="r">${fmtPrix(x.prix)}</b>`}
-        <span class="rl-moy">${pastilleEcart(x.prix, d.cle)}moy. ${fmtPrix(s.moy)} <span class="hint">(${s.n}/10)</span></span>
-        <span class="hint rl-date">${vieux(x) ? '<span class="aud-vieux">à revérifier</span> · ' : ""}${new Date(x.le).toLocaleDateString("fr-FR")}${edit ? ` <button type="button" class="x" title="Retirer cet article du commerce" data-cx="${c.id}" data-pd="${esc(d.nom)}">×</button>` : ""}</span></div>`;
+      lignes += `<div class="cl${vieux(x) ? " vieux" : ""}">
+        <input class="cl-nom" value="${esc(d.nom)}" list="audDenList" data-cid="${c.id}" data-ancien="${esc(d.nom)}" title="Changer le produit de cette ligne">
+        <input class="cl-prix" type="number" min="0" step="0.5" value="${x.prix}" data-cid="${c.id}" data-pd="${esc(d.nom)}" title="Prix d'une unité"><span class="hint">septims</span>
+        <span class="rl-moy">${pastilleEcart(x.prix, d.cle)}moy. ${fmtPrix(s.moy)}</span>
+        <span class="hint rl-date">${vieux(x) ? '<span class="aud-vieux">à revérifier</span> · ' : ""}${new Date(x.le).toLocaleDateString("fr-FR")}</span>
+        <button type="button" class="btn small" data-cx="${c.id}" data-pd="${esc(d.nom)}">Supprimer</button></div>`;
     });
     const nb = AUD.cprix.get(c.id)?.size || 0;
     return `<div class="com" data-cid="${c.id}">
-      <div class="com-tete"><b>${esc(c.nom)}</b>${c.type ? ` <span class="tag">${esc(c.type)}</span>` : ""} <span class="hint">${nb} article(s)</span>
-        ${edit ? `<span class="com-act"><button type="button" class="btn small" data-com-edit="${c.id}">Modifier</button><button type="button" class="x" title="Supprimer le commerce" data-com-sup="${c.id}">×</button></span>` : ""}</div>
-      ${lignes || `<p class="empty">${nb ? "Aucun article pour ces filtres." : "Aucun article pour l'instant."}</p>`}
-      ${edit ? `<div class="com-add"><input placeholder="Article (ex. Lingot d'acier)" list="audDenList" class="ca-nom"><select class="ca-cat">${optsCat}</select>
-        <input type="number" min="0" step="0.5" placeholder="Prix" class="ca-prix"><button type="button" class="btn small primary ca-go">Ajouter</button></div>` : ""}
+      <div class="com-tete"><b>${esc(c.nom)}</b><span class="hint">${[c.localisation, c.type].filter(Boolean).map(esc).join(" · ")}${c.localisation || c.type ? " · " : ""}${nb} produit(s)</span>
+        <span class="com-act"><button type="button" class="btn small" data-com-edit="${c.id}">Modifier</button><button type="button" class="btn small" data-com-sup="${c.id}">Supprimer</button></span></div>
+      ${lignes || `<p class="empty">${nb ? "Aucun produit pour ces filtres." : "Aucun produit pour l'instant : ajoute le premier ci-dessous."}</p>`}
+      <div class="com-add"><div class="combo"><input class="ca-nom" placeholder="Rechercher un produit… (ex. Alcool)" autocomplete="off"><div class="combo-list ca-list" hidden></div></div>
+        <select class="ca-cat" hidden>${optsCat}</select>
+        <input type="number" min="0" step="0.5" placeholder="Prix" class="ca-prix"><button type="button" class="btn small primary ca-go">Ajouter le produit</button></div>
     </div>`; }).join("")
-    : `<p class="empty">${comsVille(ville).length ? "Aucun commerce pour ces filtres." : `Aucun commerce à ${esc(ville || "?")} pour l'instant.${edit ? " Crée le premier ci-dessous." : ""}`}</p>`;
+    : `<p class="empty">${comsVille(ville).length ? "Aucun commerce pour ces filtres." : `Aucun commerce dans la région ${esc(ville || "?")} : ajoute-le avec le formulaire au-dessus.`}</p>`;
 
   const apres = (k, msg) => { recalcVille(k, ville); renderReleve(); renderNational(); if (msg) flash($("audMsg"), msg, true); };
-  const err = e => flash($("audMsg"), "Non enregistré : " + e.message + (/commerce/.test(e.message) && /function/.test(e.message) ? " (as-tu lancé 44_commerces.sql ?)" : ""), false);
-  $("audReleve").querySelectorAll("input[data-cp]").forEach(inp => inp.onchange = async () => {
-    const cid = Number(inp.dataset.cp), v = inp.value.trim(), p = v === "" ? null : Number(v.replace(",", "."));
-    if (p != null && !(p >= 0)) return flash($("audMsg"), "Prix invalide.", false);
+  const err = e => flash($("audMsg"), "Non enregistré : " + e.message + (/function|n'existe/.test(e.message) ? " (as-tu lancé 44 et 45 ?)" : ""), false);
+  $("audReleve").querySelectorAll(".com").forEach(comboProduit);
+  $("audReleve").querySelectorAll(".cl-prix").forEach(inp => inp.onchange = async () => {
+    const cid = Number(inp.dataset.cid), p = Number(inp.value.replace(",", "."));
+    if (inp.value === "" || !(p >= 0)) return flash($("audMsg"), "Prix invalide (pour enlever le produit, clique sur Supprimer).", false);
     inp.classList.add("envoi");
     const { error } = await sb.rpc("fixer_prix_commerce", { commerce: cid, nom_: inp.dataset.pd, prix_: p, categorie: null });
     inp.classList.remove("envoi");
     if (error) return err(error);
     const k = cleDenree(inp.dataset.pd);
-    if (p == null) AUD.cprix.get(cid)?.delete(k); else AUD.cprix.get(cid).set(k, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
-    recalcVille(k, ville);
-    if (p == null) { renderReleve(); renderNational(); return; }
-    const ligne = inp.closest(".rl"), s = stats(k);
-    ligne.classList.remove("vieux");
-    ligne.querySelector(".rl-moy").innerHTML = `${pastilleEcart(p, k)}moy. ${fmtPrix(s.moy)} <span class="hint">(${s.n}/10)</span>`;
+    AUD.cprix.get(cid).set(k, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() }); recalcVille(k, ville);
+    const ligne = inp.closest(".cl"); ligne.classList.remove("vieux");
+    ligne.querySelector(".rl-moy").innerHTML = `${pastilleEcart(p, k)}moy. ${fmtPrix(stats(k).moy)}`;
+    ligne.querySelector(".rl-date").textContent = new Date().toLocaleDateString("fr-FR");
     inp.classList.add("ok"); setTimeout(() => inp.classList.remove("ok"), 900);
     renderNational();
   });
+  $("audReleve").querySelectorAll(".cl-nom").forEach(inp => inp.onchange = async () => {
+    const cid = Number(inp.dataset.cid), nv = inp.value.trim(), anc = inp.dataset.ancien;
+    if (!nv || cleDenree(nv) === cleDenree(anc)) { inp.value = anc; return; }
+    const existe = AUD.toutes.find(d => d.cle === cleDenree(nv));
+    if (!existe && !await confirmer(`« ${nv} » n'existe pas encore : le créer comme nouveau produit (pour toutes les zones) et l'utiliser ici à la place de « ${anc} » ?`)) { inp.value = anc; return; }
+    const { error } = await sb.rpc("changer_produit_commerce", { commerce: cid, ancien: anc, nouveau: existe ? existe.nom : nv, categorie: null });
+    if (error) { inp.value = anc; return err(error); }
+    await chargerAudit(); majFiltresCom(); renderReleve(); renderNational(); if (estAdmin()) renderGere();
+    flash($("audMsg"), `« ${anc} » remplacé par « ${existe ? existe.nom : nv} » dans ce commerce.`, true);
+  });
   $("audReleve").querySelectorAll("[data-cx]").forEach(b => b.onclick = async () => {
     const cid = Number(b.dataset.cx);
-    if (!await confirmer(`Retirer « ${b.dataset.pd} » de ce commerce ?`)) return;
+    if (!await confirmer(`Supprimer « ${b.dataset.pd} » de ce commerce ?`)) return;
     const { error } = await sb.rpc("fixer_prix_commerce", { commerce: cid, nom_: b.dataset.pd, prix_: null, categorie: null });
     if (error) return err(error);
-    const k = cleDenree(b.dataset.pd); AUD.cprix.get(cid)?.delete(k); apres(k, `« ${b.dataset.pd} » retiré du commerce.`);
+    const k = cleDenree(b.dataset.pd); AUD.cprix.get(cid)?.delete(k); apres(k, `« ${b.dataset.pd} » supprimé du commerce.`);
   });
   $("audReleve").querySelectorAll(".ca-cat").forEach(sel => sel.onchange = async () => {
-    if (sel.value !== "+") return;
-    const nom = (prompt("Nom de la nouvelle catégorie de denrées :") || "").trim();
+    if (sel.value !== NOUVELLE) return;
+    const nom = (prompt("Nom de la nouvelle catégorie de produits :") || "").trim();
     if (!nom) { sel.value = ""; return; }
     const { data, error } = await sb.rpc("ajouter_categorie", { nom_: nom });
     if (error) { sel.value = ""; return err(error); }
     if (!AUD.cats.some(c => c.id === data)) AUD.cats.push({ id: data, nom, ordre: 900 });
-    sel.insertAdjacentHTML("beforeend", ""); const o = new Option(nom, data); sel.add(o, sel.options[sel.options.length - 1]); sel.value = String(data);
-    majFiltresCom();
+    sel.add(new Option(nom, data), sel.options[sel.options.length - 1]); sel.value = String(data);
   });
   $("audReleve").querySelectorAll(".ca-go").forEach(b => b.onclick = async () => {
-    const box = b.closest(".com"), cid = Number(box.dataset.cid), nom = box.querySelector(".ca-nom").value.trim();
-    const p = Number(String(box.querySelector(".ca-prix").value).replace(",", ".")), cat = box.querySelector(".ca-cat").value;
-    if (!nom) return flash($("audMsg"), "Indique l'article.", false);
-    if (box.querySelector(".ca-prix").value === "" || !(p >= 0)) return flash($("audMsg"), "Indique le prix.", false);
-    const k = cleDenree(nom), existe = AUD.toutes.find(d => d.cle === k);
+    const box = b.closest(".com"), cid = Number(box.dataset.cid), inp = box.querySelector(".ca-nom"), nom = inp.value.trim();
+    const pv = box.querySelector(".ca-prix").value, p = Number(String(pv).replace(",", ".")), cat = box.querySelector(".ca-cat").value;
+    if (!nom) return flash($("audMsg"), "Choisis ou tape le produit.", false);
+    if (pv === "" || !(p >= 0)) return flash($("audMsg"), "Indique le prix.", false);
+    const existe = AUD.toutes.find(d => d.cle === cleDenree(nom));
+    if (!existe && !inp.dataset.nouveau) { inp.focus(); return flash($("audMsg"), `« ${nom} » n'existe pas : choisis « ＋ Ajouter comme nouveau produit » dans la liste.`, false); }
+    if (!existe && (!cat || cat === NOUVELLE)) return flash($("audMsg"), "Choisis la catégorie du nouveau produit.", false);
     b.disabled = true;
-    const { error } = await sb.rpc("fixer_prix_commerce", { commerce: cid, nom_: existe ? existe.nom : nom, prix_: p, categorie: cat && cat !== "+" ? Number(cat) : null });
+    const { error } = await sb.rpc("fixer_prix_commerce", { commerce: cid, nom_: existe ? existe.nom : nom, prix_: p, categorie: existe ? null : Number(cat) });
     b.disabled = false;
     if (error) return err(error);
-    if (!existe || !existe.actif) { await chargerAudit(); majFiltresCom(); renderReleve(); renderNational(); renderGere(); return flash($("audMsg"), `« ${nom} » ajouté.`, true); }
+    if (!existe || !existe.actif) { await chargerAudit(); majFiltresCom(); renderReleve(); renderNational(); if (estAdmin()) renderGere(); return flash($("audMsg"), `« ${nom} » créé et ajouté.`, true); }
     if (!AUD.cprix.has(cid)) AUD.cprix.set(cid, new Map());
-    AUD.cprix.get(cid).set(k, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
-    apres(k, `« ${existe.nom} » ajouté.`);
+    AUD.cprix.get(cid).set(existe.cle, { prix: p, par: PROFIL?.nom, le: new Date().toISOString() });
+    apres(existe.cle, `« ${existe.nom} » ajouté.`);
   });
   $("audReleve").querySelectorAll("[data-com-edit]").forEach(b => b.onclick = async () => {
     const c = AUD.commerces.find(x => String(x.id) === b.dataset.comEdit);
     const nom = prompt("Nom du commerce :", c.nom); if (nom === null || !nom.trim()) return;
-    const type = prompt("Type de commerce (ex. Forge, Auberge, Épicerie — facultatif) :", c.type || ""); if (type === null) return;
-    const { error } = await sb.rpc("enregistrer_commerce", { id_: c.id, ville_: c.ville, nom_: nom.trim(), type_: type.trim() });
+    const locn = prompt("Localisation dans la région (ex. Fort-Ivar — vide si aucune) :", c.localisation || ""); if (locn === null) return;
+    const type = prompt("Concept (ex. Alcool, Forge — facultatif) :", c.type || ""); if (type === null) return;
+    const { error } = await sb.rpc("enregistrer_commerce", { id_: c.id, ville_: c.ville, nom_: nom.trim(), type_: type.trim(), localisation_: locn.trim() });
     if (error) return err(error);
-    c.nom = nom.trim(); c.type = type.trim(); majFiltresCom(); renderReleve(); flash($("audMsg"), "Commerce modifié.", true);
+    Object.assign(c, { nom: nom.trim(), type: type.trim(), localisation: locn.trim() }); majFiltresCom(); renderReleve(); flash($("audMsg"), "Commerce modifié.", true);
   });
   $("audReleve").querySelectorAll("[data-com-sup]").forEach(b => b.onclick = async () => {
     const c = AUD.commerces.find(x => String(x.id) === b.dataset.comSup), nb = AUD.cprix.get(c.id)?.size || 0;
@@ -2128,14 +2185,25 @@ function renderReleve() {
     ks.forEach(k => recalcVille(k, c.ville)); majFiltresCom(); renderReleve(); renderNational(); flash($("audMsg"), "Commerce supprimé.", true);
   });
 }
+$("ncRegion").onchange = () => remplirLocs($("ncLoc"), $("ncRegion").value, "", false);
+$("ncLoc").onchange = () => {
+  if ($("ncLoc").value !== NOUVELLE) return;
+  const l = (prompt(`Nouvelle localisation dans la région ${$("ncRegion").value} (ex. Fort-Ivar) :`) || "").trim();
+  if (!l) { $("ncLoc").value = ""; return; }
+  if (![...$("ncLoc").options].some(o => o.value === l)) $("ncLoc").add(new Option(l, l), $("ncLoc").options[$("ncLoc").options.length - 1]);
+  $("ncLoc").value = l;
+};
 $("audComAdd").onclick = async () => {
-  const ville = $("audVille").value, nom = $("audComNom").value.trim(), type = $("audComType").value.trim();
-  if (!nom) return flash($("audMsg"), "Indique le nom du commerce.", false);
-  const { data, error } = await sb.rpc("enregistrer_commerce", { id_: null, ville_: ville, nom_: nom, type_: type });
-  if (error) return flash($("audMsg"), "Non créé : " + error.message + (/enregistrer_commerce/.test(error.message) ? " (as-tu lancé 44_commerces.sql ?)" : ""), false);
-  AUD.commerces.push({ id: data, ville, nom, type, a_moi: true }); AUD.cprix.set(data, new Map());
-  $("audComNom").value = ""; $("audComType").value = "";
-  majFiltresCom(); $("audCom").value = String(data); renderReleve(); flash($("audMsg"), `Commerce « ${nom} » créé : ajoute ses articles.`, true);
+  const ville = $("ncRegion").value, loc = $("ncLoc").value === NOUVELLE ? "" : $("ncLoc").value, nom = $("ncNom").value.trim(), type = $("ncConcept").value.trim();
+  if (!ville) return flash($("ncMsg"), "Choisis la région.", false);
+  if (!nom) return flash($("ncMsg"), "Indique le nom du commerce.", false);
+  const { data, error } = await sb.rpc("enregistrer_commerce", { id_: null, ville_: ville, nom_: nom, type_: type, localisation_: loc });
+  if (error) return flash($("ncMsg"), "Non créé : " + error.message + (/enregistrer_commerce/.test(error.message) ? " (as-tu lancé 45_commerces_localisation.sql ?)" : ""), false);
+  AUD.commerces.push({ id: data, ville, localisation: loc, nom, type, a_moi: true }); AUD.cprix.set(data, new Map());
+  $("ncNom").value = ""; $("ncConcept").value = "";
+  $("audVille").value = ville; majFiltresCom(); $("audLoc").value = loc; majFiltresCom(); $("audCom").value = String(data);
+  renderReleve(); flash($("ncMsg"), `Commerce « ${nom} » ajouté : ajoute ses produits dans « Mes commerces ».`, true);
+  document.querySelector(`.com[data-cid="${data}"] .ca-nom`)?.scrollIntoView({ behavior: "smooth", block: "center" });
 };
 
 // 2. Vue nationale : avancement par ville + une ligne par denrée (détail des villes au clic)
@@ -2161,7 +2229,8 @@ function detailNat(d) {
   return `<tr class="nat-det" data-k="${esc(d.cle)}"><td colspan="5"><div class="nat-villes">${AUD.villes.map(v => { const x = prixDe(d.cle, v.ville);
     return `<span class="${x ? (vieux(x) ? "vieux" : "") : "manque"}"><b>${esc(v.ville)}</b> ${x ? fmtPrix(x.prix) : "—"}${x ? ` <span class="hint">${esc(x.par || "")}, ${new Date(x.le).toLocaleDateString("fr-FR")}</span>` : ""}</span>`; }).join("")}</div></td></tr>`;
 }
-$("audVille").onchange = () => { majFiltresCom(); renderReleve(); };
+$("audVille").onchange = () => { $("audLoc").value = ""; majFiltresCom(); renderReleve(); };
+$("audLoc").onchange = () => { majFiltresCom(); renderReleve(); };
 ["audCom", "audType", "audCat", "audAFaire"].forEach(id => $(id).onchange = renderReleve);
 $("audCherche").oninput = renderReleve;
 

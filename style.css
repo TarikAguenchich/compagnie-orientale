@@ -346,3 +346,13 @@ table.gere input,table.gere select{padding:3px 6px}
 .com-add input,.com-add select{padding:4px 6px}
 @media (max-width:620px){.com-add{grid-template-columns:1fr 1fr}}
 .rl b.r{text-align:right;padding-right:8px}
+/* commerces v2 */
+.cl{display:grid;grid-template-columns:minmax(150px,1.6fr) 90px auto minmax(90px,.9fr) minmax(80px,.8fr) auto;gap:8px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line)}
+.cl input{padding:4px 6px}
+.cl .cl-prix{text-align:right}
+.cl.vieux .cl-prix{border-color:var(--warn);background:var(--warn-bg)}
+.cl input.envoi{opacity:.5} .cl input.ok{outline:2px solid var(--ok)}
+@media (max-width:700px){.cl{grid-template-columns:1fr 90px auto}.cl .rl-moy,.cl .rl-date{grid-column:1/-1}}
+.com-add{grid-template-columns:1.6fr 1fr 90px auto}
+.com-add .combo{position:relative}
+.combo-nouveau{color:var(--accent);font-weight:600}
