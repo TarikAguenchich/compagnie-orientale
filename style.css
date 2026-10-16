@@ -336,3 +336,13 @@ table.gere input,table.gere select{padding:3px 6px}
 .gere-act{white-space:nowrap}
 .frp-carte.attente{border-color:var(--warn);background:var(--warn-bg)}
 .frp-att{color:var(--warn)}
+/* commerces */
+.com{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:12px;background:var(--field)}
+.com-tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.com-tete b{font-family:Cinzel,serif;font-size:1rem}
+.com-act{margin-left:auto;display:flex;gap:6px;align-items:center}
+.com-cat{font-family:Cinzel,serif;font-size:.72rem;color:var(--accent);margin:8px 0 2px;letter-spacing:.03em}
+.com-add{display:grid;grid-template-columns:1.4fr 1fr 90px auto;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.com-add input,.com-add select{padding:4px 6px}
+@media (max-width:620px){.com-add{grid-template-columns:1fr 1fr}}
+.rl b.r{text-align:right;padding-right:8px}

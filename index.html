@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261016e">
+<link rel="stylesheet" href="style.css?v=20261016f">
 </head>
 <body>
 <!-- Connexion -->
@@ -163,15 +163,25 @@
   <!-- Audit des prix : relevé par ville, vue nationale, contrats construits à partir des prix -->
   <div id="viewAud" hidden>
     <div class="card">
-      <h2>Relevé des prix <span class="hint" id="audProg"></span></h2>
-      <p class="hint" style="margin-top:0">Prix d'achat d'<b>une unité</b> dans ta ville. Enregistré dès que tu quittes la case (case vidée = prix effacé). À côté : la moyenne nationale. Un prix de plus d'un mois passe en <span class="aud-vieux">à revérifier</span>.</p>
-      <div class="filters" style="grid-template-columns:1fr 1fr auto">
+      <h2>Commerces et prix <span class="hint" id="audProg"></span></h2>
+      <p class="hint" style="margin-top:0">Chaque châtellerie relève les prix de ses <b>commerces</b> (prix d'<b>une unité</b>). Le prix de la ville = moyenne de ses commerces ; la moyenne nationale = moyenne des villes. Les prix s'enregistrent dès que tu quittes la case. Un prix de plus d'un mois passe en <span class="aud-vieux">à revérifier</span>. Tu ne modifies que les villes de ta zone.</p>
+      <div class="filters filters4">
         <div><label for="audVille">Ville</label><select id="audVille"></select></div>
-        <div><label for="audCherche">Denrée</label><input id="audCherche" placeholder="Rechercher…"></div>
-        <label class="liv" style="align-self:end;margin-bottom:10px"><input type="checkbox" id="audAFaire"> Seulement à faire</label>
+        <div><label for="audCom">Commerce</label><select id="audCom"></select></div>
+        <div><label for="audType">Type de commerce</label><select id="audType"></select></div>
+        <div><label for="audCat">Catégorie</label><select id="audCat"></select></div>
+      </div>
+      <div class="row" style="margin:-4px 0 10px;gap:12px">
+        <div style="flex:1;min-width:200px"><input id="audCherche" placeholder="Rechercher un article…"></div>
+        <label class="liv"><input type="checkbox" id="audAFaire"> Seulement à revérifier</label>
       </div>
       <div class="msg" id="audMsg"></div>
       <div id="audReleve"></div>
+      <div class="com-new" id="audNewCom" hidden>
+        <h3 class="k-titre">Nouveau commerce</h3>
+        <div class="row reg-add"><input id="audComNom" placeholder="Nom (ex. La Forge de la Lune)" autocomplete="off"><input id="audComType" placeholder="Type (ex. Forge) — facultatif" list="audTypes" autocomplete="off" style="max-width:240px"><button type="button" class="btn primary" id="audComAdd">Créer</button></div>
+        <datalist id="audTypes"></datalist><datalist id="audDenList"></datalist>
+      </div>
     </div>
 
     <div class="card">
@@ -395,6 +405,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261016e"></script>
+<script src="script.js?v=20261016f"></script>
 </body>
 </html>
