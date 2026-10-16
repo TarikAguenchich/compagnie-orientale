@@ -1946,26 +1946,18 @@ const cleDenree = n => sansAccent(n).replace(/[^a-z0-9]/g, "");
 const fmtPrix = n => n == null ? "—" : (Math.round(n * 100) / 100).toLocaleString("fr-FR");
 const VIEUX_MS = 30 * 24 * 3600 * 1000;                           // un prix de plus d'un mois est « à revérifier »
 const vieux = x => x && Date.now() - Date.parse(x.le) > VIEUX_MS;
-// catégories (ordre = ordre d'affichage ; « Outils » avant « Armes » pour la hache de bûcheron)
-const CATS_DENREES = [
-  ["Nourriture et boissons", /biere|vin\b|hydromel|chou|patate|poireau|tomate|fromage|tarte|venaison|viande|gourde|pomme|pain|miel|fruit|legume/],
-  ["Peaux et parties d'animaux", /cuir|peau|patte|ramure|griffe|defense|fourrure brute/],
-  ["Minerais, lingots, combustibles", /lingot|minerai|charbon|bois/],
-  ["Gemmes", /amethyste|emeraude|grenat|rubis|saphir|diamant|gemme/],
-  ["Outils", /pioche|hache de bucheron|clef|marteau de forge/],
-  ["Armes", /epee|espadon|hache|marteau|masse|arc\b|arc |fleche|dague/],
-  ["Armures et vêtements", /plastron|armure|casque|bottes|gantelets|cape|vetement|fil\b|bobine/],
-  ["Alchimie", /potion|lys|pied de lutin|sel|ingredient/],
-];
-const catDenree = n => { const s = sansAccent(n); return (CATS_DENREES.find(([, r]) => r.test(s)) || ["Autres"])[0]; };
 
 async function chargerAudit() {
-  const [v, d, p] = await Promise.all([sb.rpc("audit_villes"), sb.rpc("audit_denrees"), sb.rpc("audit_prix")]);
+  const [v, d, p, c] = await Promise.all([sb.rpc("audit_villes"), sb.rpc("audit_denrees"), sb.rpc("audit_prix"), sb.rpc("audit_categories")]);
   const err = [v, d, p].find(r => r.error);
   if (err) { flash($("audMsg"), "Audit indisponible : " + err.error.message + (/audit_/.test(err.error.message) ? " (as-tu lancé 39_audit_prix.sql ?)" : ""), false); return false; }
   const prix = new Map();
   (p.data || []).forEach(r => { if (!prix.has(r.denree)) prix.set(r.denree, new Map()); prix.get(r.denree).set(r.ville, { prix: Number(r.prix), par: r.maj_par, le: r.maj_le }); });
-  AUD = { villes: v.data || [], denrees: (d.data || []).map(x => ({ cle: x.denree, nom: x.nom, cat: catDenree(x.nom) })), prix };
+  const toutes = (d.data || []).map(x => ({ cle: x.denree, nom: x.nom, cat: x.categorie || "Autres", catId: x.categorie_id, catOrdre: x.cat_ordre ?? 999, actif: x.actif !== false }));
+  AUD = { villes: v.data || [], toutes, denrees: toutes.filter(x => x.actif), prix,
+          cats: c.error ? [] : c.data,                       // [{id, nom, ordre}] (41_denrees.sql)
+          gere: !c.error };
+  if (c.error && estAdmin()) flash($("gereMsg"), "Gestion des denrées indisponible : lance 41_denrees.sql.", false);
   return true;
 }
 const prixDe = (k, v) => AUD?.prix.get(k)?.get(v) || null;
@@ -1983,6 +1975,8 @@ async function ouvrirAudit() {
   sv.innerHTML = mes.map(v => `<option>${esc(v.ville)}</option>`).join("") || '<option value="">— aucune ville —</option>';
   if (mes.some(v => v.ville === g)) sv.value = g;
   $("audGenCard").hidden = !estAdmin();
+  $("audGereCard").hidden = !estAdmin() || !AUD.gere;
+  if (estAdmin() && AUD.gere) renderGere();
   if (estAdmin()) {
     if (!COMPAGNIES.length) await chargerCompagnies();
     const gv = $("genVille"), gg = gv.value;
@@ -1999,7 +1993,7 @@ function renderReleve() {
   const faits = AUD.denrees.filter(d => prixDe(d.cle, ville)).length, aRev = AUD.denrees.filter(d => vieux(prixDe(d.cle, ville))).length;
   $("audProg").textContent = `— ${ville} : ${faits} / ${AUD.denrees.length} relevés${aRev ? ` · ${aRev} à revérifier` : ""}`;
   const liste = AUD.denrees.filter(d => (!q || sansAccent(d.nom).includes(q)) && (!afaire || !prixDe(d.cle, ville) || vieux(prixDe(d.cle, ville))));
-  const cats = [...CATS_DENREES.map(c => c[0]), "Autres"].filter(c => liste.some(d => d.cat === c));
+  const cats = [...new Set(liste.map(d => d.cat))];          // déjà triées par catégorie (ordre de la base)
   $("audReleve").innerHTML = cats.length ? cats.map(c => `<h3 class="k-titre">${esc(c)}</h3><div class="releve">${
     liste.filter(d => d.cat === c).map(d => { const x = prixDe(d.cle, ville), s = stats(d.cle);
       const ecart = x && s.n > 1 ? (x.prix - s.moy) / s.moy : null;
@@ -2056,6 +2050,54 @@ function detailNat(d) {
 $("audVille").onchange = renderReleve;
 $("audCherche").oninput = renderReleve;
 $("audAFaire").onchange = renderReleve;
+
+// Gestion des denrées et catégories (admin)
+async function rechargerAudit(msg) { if (await chargerAudit()) { renderReleve(); renderNational(); renderGere(); if (msg) flash($("gereMsg"), msg, true); } }
+const erreurGere = e => flash($("gereMsg"), "Non enregistré : " + e.message, false);
+function renderGere() {
+  if (!AUD?.gere) return;
+  const optsCat = sel => AUD.cats.map(c => `<option value="${c.id}" ${String(c.id) === String(sel ?? "") ? "selected" : ""}>${esc(c.nom)}</option>`).join("");
+  const nb = id => AUD.toutes.filter(d => String(d.catId) === String(id)).length;
+  $("gereCats").innerHTML = `<div class="k-table"><table class="k-jr gere"><thead><tr><th>Nom</th><th class="r">Ordre</th><th class="r">Denrées</th><th></th></tr></thead><tbody>${
+    AUD.cats.map(c => `<tr><td><input value="${esc(c.nom)}" data-cat-nom="${c.id}"></td><td class="r"><input type="number" step="10" value="${c.ordre}" data-cat-ordre="${c.id}" style="width:80px"></td><td class="r">${nb(c.id)}</td>
+      <td class="r">${c.nom === "Autres" ? "" : `<button type="button" class="x" title="Supprimer la catégorie" data-cat-sup="${c.id}">×</button>`}</td></tr>`).join("")}</tbody></table></div>`;
+  $("gereDenCat").innerHTML = optsCat(AUD.cats.find(c => c.nom === "Autres")?.id);
+  const q = sansAccent($("gereCherche").value.trim());
+  const liste = AUD.toutes.filter(d => !q || sansAccent(d.nom).includes(q));
+  $("gereDen").innerHTML = `<div class="k-table"><table class="k-jr gere"><thead><tr><th>Denrée</th><th>Catégorie</th><th></th></tr></thead><tbody>${
+    liste.map(d => `<tr class="${d.actif ? "" : "k-retire"}"><td><input value="${esc(d.nom)}" data-den-nom="${esc(d.cle)}"></td>
+      <td><select data-den-cat="${esc(d.cle)}">${optsCat(d.catId)}</select></td>
+      <td class="r">${d.actif ? `<button type="button" class="btn small" data-den-off="${esc(d.cle)}">Retirer</button>` : `<button type="button" class="btn small" data-den-on="${esc(d.cle)}">Remettre</button>`}</td></tr>`).join("")}</tbody></table></div>`;
+  const den = k => AUD.toutes.find(d => d.cle === k);
+  const majDen = async (k, champs, msg) => { const d = den(k);
+    const { error } = await sb.rpc("modifier_denree", { cle_: k, nom_: champs.nom ?? d.nom, categorie: champs.cat !== undefined ? champs.cat : d.catId, actif_: champs.actif ?? d.actif });
+    if (error) return erreurGere(error); rechargerAudit(msg); };
+  $("gereDen").querySelectorAll("[data-den-nom]").forEach(i => i.onchange = () => i.value.trim() && majDen(i.dataset.denNom, { nom: i.value.trim() }, "Denrée renommée."));
+  $("gereDen").querySelectorAll("[data-den-cat]").forEach(s => s.onchange = () => majDen(s.dataset.denCat, { cat: Number(s.value) }, `« ${den(s.dataset.denCat).nom} » → ${s.selectedOptions[0].text}.`));
+  $("gereDen").querySelectorAll("[data-den-off]").forEach(b => b.onclick = async () => { if (await confirmer(`Retirer « ${den(b.dataset.denOff).nom} » des relevés ? (les prix déjà saisis sont gardés)`)) majDen(b.dataset.denOff, { actif: false }, "Denrée retirée."); });
+  $("gereDen").querySelectorAll("[data-den-on]").forEach(b => b.onclick = () => majDen(b.dataset.denOn, { actif: true }, "Denrée remise."));
+  const majCat = async (id, nom, ordre, msg) => { const { error } = await sb.rpc("enregistrer_categorie", { id_: id, nom_: nom, ordre_: ordre }); if (error) return erreurGere(error); rechargerAudit(msg); };
+  $("gereCats").querySelectorAll("[data-cat-nom]").forEach(i => i.onchange = () => { const c = AUD.cats.find(x => String(x.id) === i.dataset.catNom); if (i.value.trim()) majCat(c.id, i.value.trim(), c.ordre, "Catégorie renommée."); });
+  $("gereCats").querySelectorAll("[data-cat-ordre]").forEach(i => i.onchange = () => { const c = AUD.cats.find(x => String(x.id) === i.dataset.catOrdre); majCat(c.id, c.nom, Number(i.value) || 0, "Ordre enregistré."); });
+  $("gereCats").querySelectorAll("[data-cat-sup]").forEach(b => b.onclick = async () => {
+    const c = AUD.cats.find(x => String(x.id) === b.dataset.catSup);
+    if (!await confirmer(`Supprimer la catégorie « ${c.nom} » ?${nb(c.id) ? ` Ses ${nb(c.id)} denrée(s) passent dans « Autres ».` : ""}`)) return;
+    const { error } = await sb.rpc("supprimer_categorie", { id_: c.id }); if (error) return erreurGere(error); rechargerAudit("Catégorie supprimée.");
+  });
+}
+$("gereCherche").oninput = renderGere;
+$("gereCatAdd").onclick = async () => {
+  const nom = $("gereCatNom").value.trim(); if (!nom) return;
+  const ordre = Math.max(0, ...AUD.cats.filter(c => c.nom !== "Autres").map(c => c.ordre)) + 10;
+  const { error } = await sb.rpc("enregistrer_categorie", { id_: null, nom_: nom, ordre_: ordre });
+  if (error) return erreurGere(error); $("gereCatNom").value = ""; rechargerAudit(`Catégorie « ${nom} » ajoutée.`);
+};
+$("gereDenAdd").onclick = async () => {
+  const nom = $("gereDenNom").value.trim(); if (!nom) return;
+  if (AUD.toutes.some(d => d.cle === cleDenree(nom) && d.actif)) return flash($("gereMsg"), `« ${nom} » existe déjà.`, false);
+  const { error } = await sb.rpc("enregistrer_denree", { nom_: nom, categorie: Number($("gereDenCat").value) || null });
+  if (error) return erreurGere(error); $("gereDenNom").value = ""; rechargerAudit(`« ${nom} » ajoutée.`);
+};
 
 // 3. Construire des contrats pour une ville (admin) : denrées moins chères que la moyenne
 let GEN = null;
