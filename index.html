@@ -7,12 +7,14 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261017a">
+<link rel="stylesheet" href="style.css?v=20261017b">
+<script>try { const t = localStorage.getItem("theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}</script>
 </head>
 <body>
 <!-- Connexion -->
 <div class="wrap" id="login" hidden>
   <div class="card login-box">
+    <button type="button" class="theme-btn" title="Mode clair / sombre">☾</button>
     <h1>Compagnie de l'Empire Oriental</h1>
     <p class="sub">Registre de permanence d'Intendant</p>
     <p>Connecte-toi avec ton compte Discord. L'accès dépend de ton rôle sur le serveur : <b>Intendant</b> ou <b>Administrateur</b>.</p>
@@ -25,7 +27,7 @@
 </div>
 
 <div class="wrap" id="app" hidden>
-  <div class="userbar"><img id="userAvatar" alt="" hidden><span><b id="userName"></b> · <span id="userRole"></span></span><button type="button" class="btn small" id="logout">Déconnexion</button></div>
+  <div class="userbar"><img id="userAvatar" alt="" hidden><span><b id="userName"></b> · <span id="userRole"></span></span><button type="button" class="theme-btn" title="Mode clair / sombre">☾</button><button type="button" class="btn small" id="logout">Déconnexion</button></div>
   <h1>Compagnie de l'Empire Oriental</h1>
   <p class="sub">Registre de permanence d'Intendant</p>
 
@@ -424,6 +426,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261017a"></script>
+<script src="script.js?v=20261017b"></script>
 </body>
 </html>

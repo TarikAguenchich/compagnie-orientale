@@ -12,6 +12,20 @@
     --done-bg:#1b2a1d; --pend-bg:#24221f; --pend-line:#48443d; --warn:#e39a4a; --warn-bg:#2e2214;
   }
 }
+/* thème choisi avec le bouton ☀ / ☾ (prioritaire sur le réglage du système) */
+:root[data-theme="dark"]{
+  --bg:#16120e; --paper:#221c16; --ink:#efe4cf; --muted:#b3a288;
+  --line:#4a3d2e; --accent:#c2493f; --accent-ink:#1a0f0c; --ok:#6fbf7d; --err:#e0776b;
+  --field:#2b241c; --soft:#2a221a;
+  --done-bg:#1b2a1d; --pend-bg:#24221f; --pend-line:#48443d; --warn:#e39a4a; --warn-bg:#2e2214;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{color-scheme:light}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark}}
+.theme-btn{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+.login-box .theme-btn{position:absolute;top:12px;right:12px}
+.login-box{position:relative}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.45 "EB Garamond",Georgia,serif}
 .wrap{max-width:920px;margin:0 auto;padding:24px 16px 60px}

@@ -2444,5 +2444,17 @@ $("ctgAdd").onclick = async () => {
 };
 $("cFiltreCatalogue").onchange = () => renderCat();
 
+/* ---------- Mode clair / sombre (retenu sur l'appareil) ---------- */
+const themeSombre = () => (document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
+function majBoutonsTheme() { document.querySelectorAll(".theme-btn").forEach(b => { b.textContent = themeSombre() ? "☀" : "☾"; b.title = themeSombre() ? "Passer en mode clair" : "Passer en mode sombre"; }); }
+document.querySelectorAll(".theme-btn").forEach(b => b.onclick = () => {
+  const t = themeSombre() ? "light" : "dark";
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("theme", t); } catch {}
+  majBoutonsTheme();
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", majBoutonsTheme);
+majBoutonsTheme();
+
 /* ---------- Démarrage ---------- */
 if (SUPABASE_URL.includes("XXXXXXXX")) ecranConnexion("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.", false);
