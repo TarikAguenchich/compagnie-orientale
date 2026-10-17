@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261016g">
+<link rel="stylesheet" href="style.css?v=20261017a">
 </head>
 <body>
 <!-- Connexion -->
@@ -316,8 +316,17 @@
 
   <!-- Catalogue -->
   <div id="viewCat" hidden>
+    <div class="card">
+      <h2>Catalogues</h2>
+      <p class="hint" style="margin-top:0">Le catalogue <b>Principal</b> est celui de tout le monde. Un autre catalogue (ex. « Forge Divine ») a ses propres articles et prix, et n'est proposé qu'aux zones cochées (aucune case = toutes les zones). Dans la prise de commande, on crée un onglet lié au catalogue : la recherche n'y montre que ses articles.</p>
+      <div class="msg" id="ctgMsg"></div>
+      <div id="ctgListe"></div>
+      <div class="row reg-add" style="margin-top:8px"><input id="ctgNom" placeholder="Nouveau catalogue (ex. Forge Divine)" autocomplete="off"><button type="button" class="btn primary" id="ctgAdd">Créer</button></div>
+    </div>
+
     <div class="card" id="catFormCard">
       <h2 id="catFormTitle">Ajouter un article</h2>
+      <div style="max-width:340px;margin-bottom:12px"><label for="cCatalogue">Catalogue</label><select id="cCatalogue"></select></div>
       <div class="grid">
         <div><label for="cCat">Catégorie</label><input id="cCat" list="catList" autocomplete="off" placeholder="ex. Alcool"><datalist id="catList"></datalist></div>
         <div><label for="cNom">Nom de l'article</label><input id="cNom" autocomplete="off"></div>
@@ -342,7 +351,8 @@
 
     <div class="card">
       <h2>Articles <span class="badge" id="nbArticles">0</span></h2>
-      <input id="cSearch" placeholder="Rechercher un article, une catégorie ou un ID…" style="margin-bottom:10px">
+      <div class="row" style="margin-bottom:10px;gap:10px"><div style="min-width:220px"><select id="cFiltreCatalogue"></select></div>
+        <div style="flex:1;min-width:220px"><input id="cSearch" placeholder="Rechercher un article, une catégorie ou un ID…"></div></div>
       <div class="row" style="margin-bottom:10px">
         <label class="liv"><input type="checkbox" id="cMissing"> Seulement les articles sans ID</label>
         <span class="hint" id="nbMissing"></span>
@@ -414,6 +424,6 @@
   <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261016g"></script>
+<script src="script.js?v=20261017a"></script>
 </body>
 </html>

@@ -32,11 +32,11 @@ const dateFR = s => s ? s.split("-").reverse().join("/") : "";
 
 // Article : { k (id Supabase), cat, nom, prix, fourni, note, id (ID item), variantes, varIds, ordre }
 const versArticle = r => ({ k: String(r.id), cat: r.cat, nom: r.nom, prix: r.prix, fourni: r.fourni || "", note: r.note || "",
-  id: r.item_id || "", variantes: r.variantes?.length ? r.variantes : null, varIds: r.var_ids || null, ordre: r.ordre });
+  id: r.item_id || "", variantes: r.variantes?.length ? r.variantes : null, varIds: r.var_ids || null, ordre: r.ordre, catalogue: r.catalogue_id ?? null });
 const versLigne = a => ({ cat: a.cat, nom: a.nom, prix: a.prix, fourni: a.fourni || "", note: a.note || "", item_id: a.id || "",
-  variantes: a.variantes?.length ? a.variantes : null, var_ids: a.varIds && Object.keys(a.varIds).length ? a.varIds : null, maj_le: new Date().toISOString() });
+  variantes: a.variantes?.length ? a.variantes : null, var_ids: a.varIds && Object.keys(a.varIds).length ? a.varIds : null, catalogue_id: a.catalogue ?? null, maj_le: new Date().toISOString() });
 
-let CATALOGUE = [], ITEM = {}, catCharge = false;
+let CATALOGUE = [], ITEM = {}, catCharge = false, CATALOGUES = [];   // CATALOGUES : catalogues en plus du principal [{id, nom, zones}]
 try { const c = JSON.parse(localStorage.getItem("catalogue_cache")); if (Array.isArray(c)) CATALOGUE = c; } catch {}
 const rebuildItems = () => { ITEM = Object.fromEntries(CATALOGUE.map(a => [a.k, a])); };
 rebuildItems();
@@ -59,7 +59,9 @@ try { const s = JSON.parse(localStorage.getItem("perm_state")); if (s && Array.i
 const save = () => { try { localStorage.setItem("perm_state", JSON.stringify(state)); } catch {} };
 /* ---------- Onglets de la permanence (ex. « Urgent Faillaise ») : on n'envoie que l'onglet affiché ---------- */
 const PRINCIPAL = "Principale";
-let ONGLETS_Z = [];                                         // zone : onglets créés (table brouillon_onglets)
+let ONGLETS_Z = [], ONG_CAT_Z = {};                         // zone : onglets créés (table brouillon_onglets) et leur catalogue
+const catOnglet = n => ((estZone() ? ONG_CAT_Z : state.ongCat) || {})[n] ?? null;      // null = catalogue principal
+const nomCatalogue = id => id == null ? "Principal" : (CATALOGUES.find(c => String(c.id) === String(id))?.nom || "?");
 const ongletDe = o => o.onglet || PRINCIPAL;
 const ordresOnglet = () => state.orders.filter(o => ongletDe(o) === state.onglet);
 function listeOnglets() {
@@ -87,6 +89,9 @@ async function chargerCatalogue() {
     if (data.length < 1000) break;
   }
   CATALOGUE = tout.map(versArticle); catCharge = true;
+  const cg = estAdmin() ? await sb.from("catalogues").select("*").order("ordre").order("nom") : await sb.rpc("catalogues_visibles");
+  CATALOGUES = cg.error ? [] : cg.data || [];
+  majSelectsCatalogue(); if (typeof renderOnglets === "function" && !$("viewPerm").hidden) renderOnglets();
   try { localStorage.setItem("catalogue_cache", JSON.stringify(CATALOGUE)); } catch {}
   rebuildItems();
   rafraichirLignes();
@@ -240,12 +245,13 @@ async function chargerZone() {
   const [c, b, og] = await Promise.all([
     sb.from("brouillon_commandes").select("id, commande, cree_le, onglet").eq("zone_id", z).order("cree_le"),
     sb.from("brouillons").select("date").eq("zone_id", z).maybeSingle(),
-    sb.from("brouillon_onglets").select("nom").eq("zone_id", z).order("cree_le"),
+    sb.from("brouillon_onglets").select("*").eq("zone_id", z).order("cree_le"),
   ]);
   if (z !== ZONE) return;
   if (c.error) return flash($("sendMsg"), "Permanence partagée indisponible : " + c.error.message + " (as-tu lancé 19_secretaires.sql ?)", false);
   state.orders = c.data.map(r => ({ ...r.commande, onglet: r.onglet || PRINCIPAL }));
   ONGLETS_Z = og.error ? [] : og.data.map(x => x.nom);
+  ONG_CAT_Z = {}; if (!og.error) og.data.forEach(x => { if (x.catalogue_id != null) ONG_CAT_Z[x.nom] = x.catalogue_id; });
   if (!listeOnglets().includes(state.onglet)) state.onglet = PRINCIPAL;
   if (b.data?.date) { state.date = b.data.date; $("date").value = state.date; }
   if (editId && !state.orders.some(o => o.id === editId)) resetForm();     // supprimée par l'autre personne
@@ -334,7 +340,9 @@ function comboArticle(tr) {
     const mots = sansAccent(q.trim()).split(/\s+/).filter(Boolean);
     // on cherche aussi dans les variantes (ex. « casque blancherive » → Casque léger, variante Blancherive)
     res = [];
+    const catTab = catOnglet(state.onglet);
     CATALOGUE.forEach(a => {
+      if ((a.catalogue ?? null) !== catTab) return;               // seulement le catalogue de l'onglet
       const t = sansAccent(a.nom + " " + a.cat);
       if (mots.every(m => t.includes(m))) { res.push({ a, v: "" }); return; }
       (a.variantes || []).forEach(v => { const tv = t + " " + sansAccent(v); if (mots.every(m => tv.includes(m))) res.push({ a, v }); });
@@ -558,7 +566,7 @@ function render() {
 }
 function renderOnglets() {
   const l = listeOnglets(), nb = n => state.orders.filter(o => ongletDe(o) === n).length;
-  $("permOnglets").innerHTML = l.map(n => `<button type="button" class="ong${n === state.onglet ? " on" : ""}" data-ong="${esc(n)}">${esc(n)} <span class="badge">${nb(n)}</span></button>`).join("")
+  $("permOnglets").innerHTML = l.map(n => `<button type="button" class="ong${n === state.onglet ? " on" : ""}" data-ong="${esc(n)}" title="Catalogue : ${esc(nomCatalogue(catOnglet(n)))}">${catOnglet(n) != null ? "📖 " : ""}${esc(n)} <span class="badge">${nb(n)}</span></button>`).join("")
     + `<button type="button" class="ong ong-add" id="ongAdd" title="Créer un onglet (ex. commande urgente d'une châtellerie)">+ Onglet</button>`
     + (state.onglet !== PRINCIPAL ? `<button type="button" class="ong ong-del" id="ongDel" title="Supprimer cet onglet (ses commandes reviennent dans « ${PRINCIPAL} »)">Supprimer l'onglet</button>` : "");
   $("permOnglets").querySelectorAll("[data-ong]").forEach(b => b.onclick = () => {
@@ -568,15 +576,27 @@ function renderOnglets() {
   $("ongAdd").onclick = creerOnglet;
   if ($("ongDel")) $("ongDel").onclick = supprimerOnglet;
 }
-async function creerOnglet() {
-  const nom = (prompt("Nom du nouvel onglet (ex. Urgent Faillaise) :") || "").trim().slice(0, 40);
+function creerOnglet() {
+  if (!CATALOGUES.length) { const nom = (prompt("Nom du nouvel onglet (ex. Urgent Faillaise) :") || "").trim().slice(0, 40); if (nom) creerOngletAvec(nom, null); return; }
+  if ($("ongForm")) { $("ongForm").remove(); return; }
+  $("permOnglets").insertAdjacentHTML("afterend", `<div class="ong-form" id="ongForm">
+    <div><label>Catalogue</label><select id="ongCat"><option value="">Principal</option>${CATALOGUES.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("")}</select></div>
+    <div><label>Nom de l'onglet</label><input id="ongNom" placeholder="ex. Urgent Faillaise" maxlength="40"></div>
+    <div class="row"><button type="button" class="btn primary small" id="ongOk">Créer</button><button type="button" class="btn small" id="ongNon">Annuler</button></div></div>`);
+  $("ongCat").onchange = () => { const c = CATALOGUES.find(x => String(x.id) === $("ongCat").value); if (c && !$("ongNom").value.trim()) $("ongNom").value = c.nom; };
+  $("ongNon").onclick = () => $("ongForm").remove();
+  $("ongOk").onclick = () => { const nom = ($("ongNom").value.trim() || nomCatalogue($("ongCat").value || null)).slice(0, 40), cat = $("ongCat").value ? Number($("ongCat").value) : null;
+    $("ongForm").remove(); creerOngletAvec(nom, cat); };
+  $("ongNom").focus();
+}
+async function creerOngletAvec(nom, cat) {
   if (!nom) return;
   if (listeOnglets().some(n => n.toLowerCase() === nom.toLowerCase())) return flash($("sendMsg"), `L'onglet « ${nom} » existe déjà.`, false);
   if (estZone()) {
-    const { error } = await sb.from("brouillon_onglets").insert({ zone_id: ZONE, nom });
-    if (error) return flash($("sendMsg"), "Onglet non créé : " + error.message + (/brouillon_onglets/.test(error.message) ? " (as-tu lancé 36_onglets_permanence.sql ?)" : ""), false);
-    ONGLETS_Z.push(nom);
-  } else state.onglets = [...(state.onglets || []), nom];
+    const { error } = await sb.from("brouillon_onglets").insert(cat != null ? { zone_id: ZONE, nom, catalogue_id: cat } : { zone_id: ZONE, nom });
+    if (error) return flash($("sendMsg"), "Onglet non créé : " + error.message + (/catalogue_id/.test(error.message) ? " (as-tu lancé 46_catalogues.sql ?)" : /brouillon_onglets/.test(error.message) ? " (as-tu lancé 36_onglets_permanence.sql ?)" : ""), false);
+    ONGLETS_Z.push(nom); if (cat != null) ONG_CAT_Z[nom] = cat;
+  } else { state.onglets = [...(state.onglets || []), nom]; if (cat != null) state.ongCat = { ...(state.ongCat || {}), [nom]: cat }; }
   state.onglet = nom; save(); if (editId) resetForm(); render();
 }
 async function supprimerOnglet() {
@@ -808,8 +828,9 @@ $("cSave").onclick = async () => {
   if (!cat) return flash($("cMsg"), "Renseigne la catégorie.", false);
   if (!nom) return flash($("cMsg"), "Renseigne le nom de l'article.", false);
   if (prixTxt === "" || !Number.isFinite(prix) || prix < 0) return flash($("cMsg"), "Renseigne un prix valide.", false);
-  if (CATALOGUE.some(x => x.cat === cat && x.nom === nom && x.k !== catEdit)) return flash($("cMsg"), `« ${nom} » existe déjà dans cette catégorie.`, false);
-  const a = { cat, nom, fourni: $("cFourni").value.trim(), prix: Math.round(prix), note: $("cNote").value.trim(), id: $("cId").value.trim() };
+  const ctgF = $("cCatalogue").value ? Number($("cCatalogue").value) : null;
+  if (CATALOGUE.some(x => x.cat === cat && x.nom === nom && x.k !== catEdit && (x.catalogue ?? null) === ctgF)) return flash($("cMsg"), `« ${nom} » existe déjà dans cette catégorie de ce catalogue.`, false);
+  const a = { cat, nom, fourni: $("cFourni").value.trim(), prix: Math.round(prix), note: $("cNote").value.trim(), id: $("cId").value.trim(), catalogue: $("cCatalogue").value ? Number($("cCatalogue").value) : null };
   // Variantes : une ligne = un nom + son ID (facultatif)
   const ancien = catEdit ? ITEM[catEdit] : null;
   const vars = [], varIds = {};
@@ -844,12 +865,14 @@ function renderCat() {
   $("catList").innerHTML = ""; cats.forEach(c => $("catList").append(new Option(c)));
   const q = $("cSearch").value.trim().toLowerCase(), seulSansId = $("cMissing").checked;
   majCompteurId();
-  const list = CATALOGUE.filter(a => (!q || (a.nom + " " + a.cat + " " + (a.fourni || "") + " " + (a.id || "") + " " + Object.values(a.varIds || {}).join(" ")).toLowerCase().includes(q))
+  const fCtg = $("cFiltreCatalogue").value;
+  const list = CATALOGUE.filter(a => (fCtg === "" || (fCtg === "0" ? a.catalogue == null : String(a.catalogue) === fCtg)) && (!q || (a.nom + " " + a.cat + " " + (a.fourni || "") + " " + (a.id || "") + " " + Object.values(a.varIds || {}).join(" ")).toLowerCase().includes(q))
     && (!seulSansId || manqueId(a)));
   if (!list.length) { $("catTable").innerHTML = `<p class="empty">${CATALOGUE.length ? "Aucun article." : "Chargement du catalogue…"}</p>`; return; }
   let cur = null, rows = "";
   list.forEach(a => {
-    if (a.cat !== cur) { rows += `<tr class="cat-head"><td colspan="5">${esc(a.cat)}</td></tr>`; cur = a.cat; }
+    const tete = (fCtg === "" && a.catalogue != null ? "📖 " + nomCatalogue(a.catalogue) + " — " : "") + a.cat;
+    if (tete !== cur) { rows += `<tr class="cat-head"><td colspan="5">${esc(tete)}</td></tr>`; cur = tete; }
     const idCell = a.variantes
       ? a.variantes.map(v => `<div class="id-var">${esc(v)} <input class="id-input${a.varIds?.[v] ? "" : " missing"}" data-idk="${a.k}" data-idvar="${esc(v)}" value="${esc(a.varIds?.[v] || "")}" placeholder="ID"></div>`).join("")
       : `<input class="id-input${a.id ? "" : " missing"}" data-idk="${a.k}" value="${esc(a.id || "")}" placeholder="ID">`;
@@ -863,7 +886,7 @@ function renderCat() {
   $("catTable").querySelectorAll("[data-ce]").forEach(b => b.onclick = () => {
     const a = ITEM[b.dataset.ce];
     catEdit = a.k;
-    $("cCat").value = a.cat; $("cNom").value = a.nom; $("cPrix").value = a.prix;
+    $("cCat").value = a.cat; $("cNom").value = a.nom; $("cPrix").value = a.prix; $("cCatalogue").value = a.catalogue ?? "";
     $("cId").value = a.id || "";
     $("cFourni").value = a.fourni || ""; $("cNote").value = a.note || "";
     $("cVars").innerHTML = ""; (a.variantes || []).forEach(v => ajouterVariante(v, a.varIds?.[v] || "")); majChampId();
@@ -2382,6 +2405,44 @@ function parchemin(titre, c) {
   return url;
 }
 document.fonts?.load?.('700 38px Cinzel').then(() => PARCH_CACHE.clear()).catch(() => {});
+
+/* ---------- Catalogues (admin) : principal + catalogues réservés à certaines zones ---------- */
+function majSelectsCatalogue() {
+  const opts = `<option value="">Principal</option>` + CATALOGUES.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("");
+  const s1 = $("cCatalogue"), g1 = s1.value; s1.innerHTML = opts; s1.value = CATALOGUES.some(c => String(c.id) === g1) ? g1 : "";
+  const s2 = $("cFiltreCatalogue"), g2 = s2.value;
+  s2.innerHTML = `<option value="">Tous les catalogues</option><option value="0">Principal</option>` + CATALOGUES.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("");
+  s2.value = g2 === "" || g2 === "0" || CATALOGUES.some(c => String(c.id) === g2) ? g2 : "";
+  if (estAdmin()) renderCatalogues();
+}
+function renderCatalogues() {
+  const nb = id => CATALOGUE.filter(a => (a.catalogue ?? null) === id).length;
+  $("ctgListe").innerHTML = `<div class="k-table"><table class="k-jr gere"><thead><tr><th>Catalogue</th><th>Zones qui peuvent commander</th><th class="r">Articles</th><th></th></tr></thead><tbody>
+    <tr><td><b>Principal</b></td><td class="hint">toutes</td><td class="r">${nb(null)}</td><td></td></tr>
+    ${CATALOGUES.map(c => `<tr><td><input value="${esc(c.nom)}" data-ctg-nom="${c.id}"></td>
+      <td class="ctg-zones">${[1, 2, 3, 4, 5, 6, 7].map(z => `<label class="liv"><input type="checkbox" data-ctg-z="${c.id}" value="${z}" ${(c.zones || []).includes(z) ? "checked" : ""}> ${z}</label>`).join("")}<span class="hint">${(c.zones || []).length ? "" : "(toutes)"}</span></td>
+      <td class="r">${nb(c.id)}</td><td class="r"><button type="button" class="x" title="Supprimer le catalogue" data-ctg-sup="${c.id}">×</button></td></tr>`).join("")}</tbody></table></div>`;
+  const maj = async (id, champs, msg) => { const { error } = await sb.from("catalogues").update(champs).eq("id", id); if (error) return flash($("ctgMsg"), "Non enregistré : " + error.message, false); flash($("ctgMsg"), msg, true); chargerCatalogue(); };
+  $("ctgListe").querySelectorAll("[data-ctg-nom]").forEach(i => i.onchange = () => i.value.trim() && maj(Number(i.dataset.ctgNom), { nom: i.value.trim() }, "Catalogue renommé."));
+  $("ctgListe").querySelectorAll("[data-ctg-z]").forEach(cb => cb.onchange = () => {
+    const id = cb.dataset.ctgZ, zones = [...$("ctgListe").querySelectorAll(`[data-ctg-z="${id}"]:checked`)].map(x => Number(x.value));
+    maj(Number(id), { zones }, zones.length ? `Réservé aux zones ${zones.join(", ")}.` : "Ouvert à toutes les zones.");
+  });
+  $("ctgListe").querySelectorAll("[data-ctg-sup]").forEach(b => b.onclick = async () => {
+    const c = CATALOGUES.find(x => String(x.id) === b.dataset.ctgSup), n = nb(c.id);
+    if (!await confirmer(`Supprimer le catalogue « ${c.nom} »${n ? ` et ses ${n} article(s)` : ""} ? C'est définitif.`)) return;
+    const { error } = await sb.from("catalogues").delete().eq("id", c.id);
+    if (error) return flash($("ctgMsg"), "Impossible : " + error.message, false);
+    flash($("ctgMsg"), "Catalogue supprimé.", true); chargerCatalogue();
+  });
+}
+$("ctgAdd").onclick = async () => {
+  const nom = $("ctgNom").value.trim(); if (!nom) return;
+  const { error } = await sb.from("catalogues").insert({ nom });
+  if (error) return flash($("ctgMsg"), "Non créé : " + error.message + (/catalogues/.test(error.message) ? " (as-tu lancé 46_catalogues.sql ?)" : ""), false);
+  $("ctgNom").value = ""; flash($("ctgMsg"), `Catalogue « ${nom} » créé : ajoute-lui des articles (choisis-le dans « Ajouter un article »).`, true); chargerCatalogue();
+};
+$("cFiltreCatalogue").onchange = () => renderCat();
 
 /* ---------- Démarrage ---------- */
 if (SUPABASE_URL.includes("XXXXXXXX")) ecranConnexion("⚠ Renseigne SUPABASE_URL et SUPABASE_KEY en haut de script.js.", false);
