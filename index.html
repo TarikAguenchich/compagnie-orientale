@@ -1,431 +1,395 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Permanence — Compagnie</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M32 3 L58 12 V30 C58 46 46 56 32 61 C18 56 6 46 6 30 V12 Z' fill='%237a1f1a' stroke='%23d4a843' stroke-width='3'/><text x='32' y='42' text-anchor='middle' font-family='Georgia,serif' font-size='30' font-weight='bold' fill='%23f3d98b'>C</text></svg>">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261017b">
-<script>try { const t = localStorage.getItem("theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch {}</script>
-</head>
-<body>
-<!-- Connexion -->
-<div class="wrap" id="login" hidden>
-  <div class="card login-box">
-    <button type="button" class="theme-btn" title="Mode clair / sombre">☾</button>
-    <h1>Compagnie de l'Empire Oriental</h1>
-    <p class="sub">Registre de permanence d'Intendant</p>
-    <p>Connecte-toi avec ton compte Discord. L'accès dépend de ton rôle sur le serveur : <b>Intendant</b> ou <b>Administrateur</b>.</p>
-    <p class="msg err" id="loginMsg" hidden style="display:block"></p>
-    <div class="row" style="margin-top:14px">
-      <button type="button" class="btn primary discord" id="loginBtn">Se connecter avec Discord</button>
-      <button type="button" class="btn" id="loginOut" hidden>Se déconnecter</button>
-    </div>
-  </div>
-</div>
+:root{
+  --bg:#e9e1cf; --paper:#f6f0e1; --ink:#2b2118; --muted:#6d5d49;
+  --line:#c9b894; --accent:#7a1f1a; --accent-ink:#fff7ea; --ok:#2f6b3a; --err:#9b2c22;
+  --field:#fffaf0; --soft:#efe6d2;
+  --done-bg:#e3eedc; --pend-bg:#ebe8e2; --pend-line:#bdb6aa; --warn:#c06a12; --warn-bg:#f8e9d4;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16120e; --paper:#221c16; --ink:#efe4cf; --muted:#b3a288;
+    --line:#4a3d2e; --accent:#c2493f; --accent-ink:#1a0f0c; --ok:#6fbf7d; --err:#e0776b;
+    --field:#2b241c; --soft:#2a221a;
+    --done-bg:#1b2a1d; --pend-bg:#24221f; --pend-line:#48443d; --warn:#e39a4a; --warn-bg:#2e2214;
+  }
+}
+/* thème choisi avec le bouton ☀ / ☾ (prioritaire sur le réglage du système) */
+:root[data-theme="dark"]{
+  --bg:#16120e; --paper:#221c16; --ink:#efe4cf; --muted:#b3a288;
+  --line:#4a3d2e; --accent:#c2493f; --accent-ink:#1a0f0c; --ok:#6fbf7d; --err:#e0776b;
+  --field:#2b241c; --soft:#2a221a;
+  --done-bg:#1b2a1d; --pend-bg:#24221f; --pend-line:#48443d; --warn:#e39a4a; --warn-bg:#2e2214;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{color-scheme:light}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){color-scheme:dark}}
+.theme-btn{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:1rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+.login-box .theme-btn{position:absolute;top:12px;right:12px}
+.login-box{position:relative}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.45 "EB Garamond",Georgia,serif}
+.wrap{max-width:920px;margin:0 auto;padding:24px 16px 60px}
+h1{font-family:Cinzel,serif;font-weight:700;font-size:1.7rem;margin:0 0 4px;letter-spacing:.02em}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:18px;margin-bottom:16px}
+.card h2{font-family:Cinzel,serif;font-size:1.05rem;margin:0 0 12px;color:var(--accent);letter-spacing:.03em;display:flex;align-items:center;gap:8px}
+.badge{font-family:"EB Garamond",serif;font-size:.85rem;background:var(--accent);color:var(--accent-ink);border-radius:10px;padding:0 8px}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.grid2{display:grid;grid-template-columns:1fr 2fr;gap:12px}
+@media (max-width:680px){.grid,.grid2{grid-template-columns:1fr}}
+label{display:block;font-weight:600;font-size:.92rem;margin-bottom:4px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+textarea{min-height:56px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+.hint{font-size:.85rem;color:var(--muted)}
+table{width:100%;border-collapse:collapse}
+th{font-family:Cinzel,serif;font-size:.78rem;text-align:left;color:var(--muted);padding:6px;border-bottom:1px solid var(--line)}
+td{padding:6px;border-bottom:1px dashed var(--line);vertical-align:middle}
+td.qty{width:80px} td.cost{width:230px;font-size:.9rem;color:var(--muted)} td.del{width:36px;text-align:center}
+td.n{width:60px;text-align:right;font-weight:600}
+.btn{font-family:Cinzel,serif;font-weight:700;font-size:.88rem;border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:4px;padding:9px 14px;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink)}
+.btn.small{padding:4px 9px;font-size:.75rem}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.x{border:none;background:none;color:var(--err);font-size:1.2rem;cursor:pointer}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.total{margin-left:auto;font-family:Cinzel,serif;font-weight:700;text-align:right}
+.msg{padding:10px 12px;border-radius:4px;margin-top:12px;display:none}
+.msg.ok{display:block;border:1px solid var(--ok);color:var(--ok)}
+.msg.err{display:block;border:1px solid var(--err);color:var(--err)}
+.order{background:var(--soft);border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin-bottom:10px}
+.order-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.order-head b{font-family:Cinzel,serif;font-size:.95rem}
+.order ul{margin:6px 0 0;padding-left:18px}
+.order .meta{font-size:.9rem;color:var(--muted);margin-top:4px}
+.empty{color:var(--muted);font-style:italic}
+.editing{outline:2px solid var(--accent)}
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:10}
+#modal[hidden]{display:none}
+.modal-box{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:18px;max-width:440px;width:100%}
+.modal-box p{margin:0 0 14px}
+.tag{font-size:.8rem;border-radius:10px;padding:0 8px;border:1px solid}
+.tag.ok{color:var(--ok);border-color:var(--ok)}
+.tag.err{color:var(--err);border-color:var(--err)}
+nav.tabs{display:flex;flex-wrap:wrap;gap:0 6px;margin:0 0 18px;border-bottom:1px solid var(--line)}
+nav.tabs button{font-family:Cinzel,serif;font-weight:700;font-size:.9rem;background:none;border:none;border-bottom:3px solid transparent;color:var(--muted);padding:8px 12px;cursor:pointer}
+nav.tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+.perm{border:1px solid var(--line);border-radius:6px;background:var(--paper);margin-bottom:12px}
+.perm summary{cursor:pointer;padding:12px 14px;display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;list-style:none}
+.perm summary::-webkit-details-marker{display:none}
+.perm summary b{font-family:Cinzel,serif}
+.perm summary::before{content:"▸";color:var(--accent)}
+.perm[open] summary::before{content:"▾"}
+.perm .body{padding:0 14px 14px}
+.perm h3{font-family:Cinzel,serif;font-size:.85rem;color:var(--accent);margin:14px 0 6px}
+.perm.pending{background:var(--pend-bg);border-color:var(--pend-line)}
+.perm.done{background:var(--done-bg);border-color:var(--ok)}
+.perm.done summary b{color:var(--ok)}
+.liv{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:.9rem;margin:0;cursor:pointer}
+.liv input{width:18px;height:18px;accent-color:var(--ok);margin:0;cursor:pointer}
+.order.livree{border-color:var(--warn);background:var(--warn-bg)}
+.order.payee{border-color:var(--ok);background:var(--done-bg)}
+.order.payee .order-head b{text-decoration:line-through;text-decoration-color:var(--ok)}
+.filters{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px}
+@media (max-width:680px){.filters{grid-template-columns:1fr}}
+@media (max-width:680px){
+  #lines thead{display:none}
+  #lines tr{display:grid;grid-template-columns:1fr 70px 32px;gap:6px;border-bottom:1px dashed var(--line);padding:6px 0}
+  #lines td{border:none;padding:0}
+  #lines td.cost{grid-column:1 / -1;width:auto}
+}
+.cat-row td{font-size:.95rem}
+.cat-row td.p{white-space:nowrap;text-align:right;font-weight:600}
+.cat-row td.act{white-space:nowrap;text-align:right;width:1%}
+tr.cat-head td{font-family:Cinzel,serif;font-size:.85rem;color:var(--accent);padding-top:16px;border-bottom:1px solid var(--line)}
+code{font-size:.85em;background:var(--soft);padding:1px 4px;border-radius:3px}
+@media (max-width:680px){
+  #catTable thead{display:none}
+  .cat-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .cat-row td{border:none;padding:0}
+  .cat-row td.f{grid-column:1 / -1}
+  tr.cat-head{display:block}
+  tr.cat-head td{display:block}
+}
+.mono,.id-input{font-family:ui-monospace,Consolas,monospace}
+.id-input{width:140px;padding:4px 6px;font-size:.85rem}
+.id-input.missing{border-color:var(--err);background:transparent}
+.id-var{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin:2px 0;font-size:.8rem;color:var(--muted)}
+.cat-row td.idc{text-align:right;white-space:nowrap}
+@media (max-width:680px){ .cat-row td.idc{grid-column:1 / -1;text-align:left} .id-var{justify-content:flex-start} }.grid4{grid-template-columns:1fr 1fr 1fr 1fr}
+@media (max-width:820px){.grid4{grid-template-columns:1fr 1fr}}
+@media (max-width:680px){.grid4{grid-template-columns:1fr}}
+.reg-add input{flex:2 1 200px;width:auto}
+.reg-add select{flex:1 1 160px;width:auto}
+.reg-row td.reg-lien{width:220px}
+.reg-row td.reg-lien select{padding:4px 8px;font-size:.95rem}
+.reg-row td.act{white-space:nowrap;text-align:right;width:1%}
+@media (max-width:680px){
+  .reg-row{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .reg-row td{border:none;padding:0}
+  .reg-row td.reg-lien{grid-column:1 / -1;grid-row:2;width:auto}
+}
+.login-box{max-width:520px;margin:60px auto}
+.login-box h1{font-size:1.5rem}
+.btn.discord{background:#5865F2;border-color:#5865F2;color:#fff}
+#loginMsg[hidden]{display:none !important}
+.userbar{display:flex;justify-content:flex-end;align-items:center;gap:10px;font-size:.92rem;color:var(--muted);margin-bottom:8px}
+.userbar img{width:28px;height:28px;border-radius:50%}
+.combo{position:relative}
+.combo .search{padding-right:30px;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:calc(100% - 16px) 55%,calc(100% - 11px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+.combo .search.absent{border-color:var(--err);color:var(--err)}
+.combo-list{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:20;max-height:340px;overflow:auto;background:var(--field);border:1px solid var(--line);border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.combo-list[hidden]{display:none}
+.combo-cat{font-family:Cinzel,serif;font-size:.75rem;color:var(--accent);padding:8px 10px 3px;position:sticky;top:0;background:var(--field);border-bottom:1px solid var(--line)}
+.combo-opt{display:flex;justify-content:space-between;gap:10px;padding:6px 10px 6px 18px;cursor:pointer}
+.combo-opt .hint{white-space:nowrap}
+.combo-opt.on,.combo-opt:hover{background:var(--soft)}
+.combo-opt.on{outline:1px solid var(--accent);outline-offset:-1px}
+.combo-vide{padding:10px;color:var(--muted);font-style:italic}
+.var-ligne{display:grid;grid-template-columns:2fr 1fr 32px;gap:8px;align-items:center;margin-bottom:6px}
+.var-box .btn.small{margin-top:2px}
+input:disabled{opacity:.55;cursor:not-allowed}
+@media (max-width:680px){.var-ligne{grid-template-columns:1fr 1fr 28px}}
+.perm.partiel{background:var(--warn-bg);border-color:var(--warn)}
+.perm.partiel summary b{color:var(--warn)}
+.tag.orange{color:var(--warn);border-color:var(--warn)}
+.liv input:disabled{opacity:.45;cursor:not-allowed}
+.liv:has(input:disabled){opacity:.6;cursor:not-allowed}
+.etats{gap:8px 14px}
+.liv.pay input{accent-color:var(--ok)}
+.order.livree .liv:first-child input{accent-color:var(--warn)}
+.filters4{grid-template-columns:repeat(4,1fr)}
+#sIntWrap[hidden]{display:none}
+@media (max-width:820px){.filters4{grid-template-columns:1fr 1fr}}
+@media (max-width:680px){.filters4{grid-template-columns:1fr}}
+.stock-lieu{font-family:Cinzel,serif;font-size:.9rem;color:var(--accent);margin:16px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}
+#nonLie[hidden]{display:none !important}
+select:disabled{opacity:.75;cursor:not-allowed}
+#fIntWrap[hidden],#fLieuWrap[hidden]{display:none}
+.ctr-barre{align-items:flex-end}
+.ctr-barre > div{flex:1 1 220px}
+.ctr-grille{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+@media (max-width:900px){.ctr-grille{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:520px){.ctr-grille{grid-template-columns:repeat(2,1fr)}}
+.ctr{margin:0;display:grid;grid-template-rows:auto 1fr;gap:6px;min-width:0}
+.ctr img{display:block;width:100%;aspect-ratio:369/1414;height:auto;object-fit:cover;border-radius:4px;border:2px solid var(--line);box-sizing:border-box}
+.ctr figcaption{display:flex;flex-direction:column;font-size:.85rem;line-height:1.25;height:5.4em;overflow:hidden}
+.ctr figcaption .hint{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ctr-prix{font-weight:600;margin-top:auto}
+.ctr-gros img{border-color:#9b2c22}.ctr-moyen img{border-color:var(--warn)}.ctr-petit img{border-color:#d4a843}
 
-<div class="wrap" id="app" hidden>
-  <div class="userbar"><img id="userAvatar" alt="" hidden><span><b id="userName"></b> · <span id="userRole"></span></span><button type="button" class="theme-btn" title="Mode clair / sombre">☾</button><button type="button" class="btn small" id="logout">Déconnexion</button></div>
-  <h1>Compagnie de l'Empire Oriental</h1>
-  <p class="sub">Registre de permanence d'Intendant</p>
+/* Contrats envoyés : sceaux des villes */
+.ville-suivi{border:1px solid var(--line);border-radius:6px;margin-top:10px;background:var(--bg)}
+.ville-suivi > summary{cursor:pointer;padding:12px 14px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;font-family:Cinzel,serif;font-size:1.05rem}
+.ville-suivi > summary .hint{font-family:inherit;font-size:.8rem}
+.ville-suivi[open] > summary{border-bottom:1px solid var(--line)}
+.suivi{padding:14px;border-top:1px solid var(--line)}
+.ville-suivi > summary + .suivi{border-top:0}
+.suivi.accompli{opacity:.75}
+.suivi-tete{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:10px}
+.suivi-ctr{cursor:pointer;grid-template-rows:auto 1fr}
+.suivi-cap{display:block;font-size:.85rem;line-height:1.3;height:5.3em;overflow:hidden}
+.suivi-cap .hint{display:block}
+.suivi-cap input{width:16px;height:16px;margin:0 2px 0 0;vertical-align:-3px;accent-color:var(--ok)}
+.ctr-img{position:relative;display:block}
+.ctr .ctr-img .sceau{position:absolute;left:50%;top:83.5%;width:62%;height:auto;aspect-ratio:auto;border:0;border-radius:0;object-fit:contain;
+  transform:translate(-50%,-50%) rotate(var(--a,0deg));filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));pointer-events:none}
+.suivi-ctr.fait .ctr-img > img:first-child{border-color:var(--ok)}
+.suivi-actions{margin-top:12px}
+.suivi-actions[hidden]{display:none}
+.suivi-suppr{margin-top:10px;justify-content:flex-end}
 
-  <nav class="tabs">
-    <button type="button" id="tabPerm" class="on">Prise de commande</button>
-    <button type="button" id="tabEnc">Commandes en cours <span class="badge" id="nbEnc" hidden>0</span></button>
-    <button type="button" id="tabHist">Historique</button>
-    <button type="button" id="tabStock">Stock</button>
-    <button type="button" id="tabFrp" hidden>Frappe de septims</button>
-    <button type="button" id="tabAud" hidden>Audit des prix</button>
-    <button type="button" id="tabCtr" hidden>Contrats d'exportation</button>
-    <button type="button" id="tabCpt" hidden>Compta</button>
-    <button type="button" id="tabCat" hidden>Catalogue</button>
-    <button type="button" id="tabReg" hidden>Réglages</button>
-  </nav>
-  <p class="hint" id="dbStatus" style="margin:-8px 0 14px"></p>
+/* Compagnies d'exportation (Réglages) */
+.cie-mini{width:34px;height:auto;aspect-ratio:369/1414;object-fit:cover;object-position:top;border-radius:3px;display:block}
+.cie-off{opacity:.55}
+.reg-act{white-space:nowrap;text-align:right}
+.reg-act .liv{display:inline-flex;margin-right:6px}
+.cie-form{border-top:1px solid var(--line);margin-top:14px;padding-top:12px;display:grid;gap:10px}
+.cie-form h3{margin:0;font-family:Cinzel,serif;font-size:1rem}
+.cie-apercu{display:grid;grid-template-columns:repeat(3,minmax(0,110px));gap:10px}
+.cie-apercu:empty{display:none}
+.cie-tailles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cie-tailles > div{display:grid;gap:6px;align-content:start}
+@media (max-width:640px){.cie-tailles{grid-template-columns:1fr}.reg-act{white-space:normal}}
 
-  <div id="viewPerm">
-  <!-- 1. Permanence -->
-  <div class="card">
-    <h2>Permanence</h2>
-    <div class="grid grid4">
-      <div id="zoneWrap" hidden><label for="zone">Zone</label><select id="zone"></select></div>
-      <div><label for="intendant">Intendant</label><select id="intendant"></select></div>
-      <div><label for="lieu">Châtellerie</label><select id="lieu"></select></div>
-      <div><label for="coffre">Coffre</label><select id="coffre"></select></div>
-      <div><label for="date">Date</label><input type="date" id="date"></div>
-    </div>
-    <p class="msg err" id="nonLie" style="display:none"></p>
-  </div>
+/* Réglages : zones */
+.zones td{vertical-align:middle;padding:6px}
+.zones input{min-width:140px}
+.zones .hint{display:block;font-size:.75rem}
+@media (max-width:760px){.zones thead{display:none}.zones tr{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;border-bottom:1px solid var(--line);padding:8px 0}.zones td{padding:2px}.zones td:first-child{grid-column:1/-1}}
+.puces{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.puce{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:999px;padding:2px 8px;font-size:.88rem;background:var(--paper)}
+.puce small{color:var(--muted);font-size:.7rem}
+.puce.manuel{border-color:var(--accent)}
+.puce-x{border:0;background:none;color:var(--accent);cursor:pointer;padding:0 0 0 2px;font-size:.8rem;line-height:1}
+.puce-ajout{width:auto;min-width:0;padding:2px 6px;font-size:.85rem}
 
-  <!-- Onglets de la permanence -->
-  <div class="perm-onglets" id="permOnglets"></div>
+/* ---------- Compta ---------- */
+.pos{color:var(--ok)} .neg{color:var(--err)}
+.k-coffres{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.k-coffre{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--field)}
+.k-z{font-family:Cinzel,serif;font-size:.8rem;color:var(--muted)}
+.k-solde{font-size:1.5rem;font-weight:700;margin:2px 0}
+.k-solde.neg{color:var(--err)}
+.k-es{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:.9rem;align-items:baseline}
+.k-res{margin-top:6px;font-size:.9rem}
+.k-res summary{cursor:pointer;color:var(--accent)}
+.k-res div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed var(--line);padding:2px 0}
+.k-titre{font-family:Cinzel,serif;font-size:.85rem;color:var(--accent);margin:16px 0 8px}
+.k-table{overflow-x:auto}
+.k-jr td,.k-jr th{font-size:.92rem}
+.k-jr .r{text-align:right;white-space:nowrap}
+.k-jr td.r{font-weight:600}
+.k-d{white-space:nowrap}
+.k-type{display:inline-block;font-size:.72rem;font-family:Cinzel,serif;border:1px solid var(--line);border-radius:3px;padding:0 5px;color:var(--muted);margin-right:4px}
+.k-form{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.k-form .k-lib{grid-column:span 3}
+@media (max-width:680px){.k-form{grid-template-columns:1fr 1fr}.k-form .k-lib{grid-column:1/-1}}
+.k-loy input{max-width:150px}
+.k-tuiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:760px){.k-tuiles{grid-template-columns:1fr 1fr}}
+.k-tuile{border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--field);display:flex;flex-direction:column}
+.k-tuile b{font-size:1.15rem}
+.k-leg{font-size:.85rem;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 8px}
+.k-pt{display:inline-block;width:10px;height:10px;border-radius:2px;background:currentColor}
+.k-pt.pos{color:var(--ok)} .k-pt.neg{color:var(--err);margin-left:10px}
+.k-zbloc{margin-bottom:8px}
+.k-zn{font-weight:600;font-size:.92rem}
+.k-bar{display:grid;grid-template-columns:80px 1fr 130px;align-items:center;gap:8px;font-size:.85rem;padding:2px 0}
+.k-bl{color:var(--muted)}
+.k-bt{height:10px;background:var(--soft);border-radius:0 4px 4px 0;overflow:hidden}
+.k-bf{display:block;height:100%;border-radius:0 4px 4px 0}
+.k-bf.pos{background:var(--ok)} .k-bf.neg{background:var(--err)}
+.k-bv{text-align:right;white-space:nowrap}
+.k-bar:hover .k-bf{filter:brightness(1.15)}
+.k-recap{margin-top:12px}
+.k-tops{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:760px){.k-tops{grid-template-columns:1fr}}
+.k-top{margin:0;padding-left:22px;font-size:.92rem}
+.k-top li{padding:2px 0;border-bottom:1px dashed var(--line)}
+.k-top li span:first-child{display:block}
+.k-inv{margin-top:8px;font-size:.9rem;border-top:1px solid var(--line);padding-top:6px}
+.k-invt{font-family:Cinzel,serif;font-size:.72rem;color:var(--muted);margin-bottom:2px}
+.k-inv div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed var(--line);padding:1px 0}
+.k-alerte{color:var(--warn)!important;font-weight:600}
+.k-tuiles{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.k-obj{display:grid;grid-template-columns:1fr 110px 30px;gap:8px;margin-bottom:6px;align-items:center}
+.k-form .k-lib2{grid-column:span 2}
+@media (max-width:680px){.k-form .k-lib2{grid-column:1/-1}}
 
-  <!-- 2. Saisie d'une commande -->
-  <div class="card" id="formCard">
-    <h2 id="formTitle">Nouvelle commande</h2>
-    <div class="grid2">
-      <div>
-        <label for="clientType">Type de client</label>
-        <select id="clientType"><option>Particulier</option><option>Institution</option></select>
-      </div>
-      <div>
-        <label for="client">Nom du personnage / de l'institution</label>
-        <input id="client" list="institutions" autocomplete="off">
-        <datalist id="institutions"></datalist>
-      </div>
-    </div>
+/* ---------- Frappe ---------- */
+.frp-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.frp-carte{border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:var(--field);display:flex;flex-direction:column;gap:8px}
+.frp-carte.faite{border-color:var(--ok);background:var(--done-bg)}
+.frp-tete{display:flex;justify-content:space-between;align-items:baseline;font-family:Cinzel,serif}
+.frp-ok{color:var(--ok)}
+.frp-saisie label{margin-bottom:2px}
+.frp-besoin{font-size:.9rem;margin:6px 0}
+.frp-tot td{border-top:1px solid var(--line);font-weight:600}
+.frp-sem .row{gap:6px;flex-wrap:nowrap}
+.frp-sem select{min-width:0;max-width:340px}
 
-    <table id="lines" style="margin-top:14px">
-      <thead><tr><th>Article</th><th>Qté</th><th>Coût</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <div class="row" style="margin-top:10px">
-      <button type="button" class="btn small" id="addLine">+ Ligne</button>
-      <span class="total" id="orderTotal"></span>
-    </div>
+/* ---------- Livraison groupée / commandes annulées ---------- */
+.livraison{margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:6px;gap:10px;flex-wrap:wrap}
+.livraison.fait{border-style:solid;border-color:var(--warn);background:var(--warn-bg)}
+.livraison.fait input{accent-color:var(--warn)}
+.order.annulee{opacity:.65;border-style:dashed}
+.order.annulee .order-head b,.order.annulee ul{text-decoration:line-through}
+.k-act{white-space:nowrap;text-align:right}
+.k-ico{border:none;background:none;color:var(--accent);cursor:pointer;font-size:1rem;padding:0 4px}
+.k-loy-in{width:100px;padding:3px 6px}
+tr.k-retire td{opacity:.6}
+tr.k-retire td:nth-last-child(n+2){text-decoration:line-through}
+tr.k-retire .tag{text-decoration:none}
 
-    <div style="margin-top:12px">
-      <label for="notes">Remarque <span class="hint">(facultatif)</span></label>
-      <textarea id="notes" placeholder="Acompte versé, précision de taille, etc."></textarea>
-    </div>
-    <div class="row" style="margin-top:12px">
-      <button type="button" class="btn primary" id="saveOrder">Ajouter à la permanence</button>
-      <button type="button" class="btn" id="cancelEdit" style="display:none">Annuler la modification</button>
-    </div>
-    <div class="msg" id="formMsg"></div>
-  </div>
+/* ---------- Onglets de la permanence ---------- */
+.perm-onglets{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.ong{font-family:Cinzel,serif;font-weight:700;font-size:.82rem;border:1px solid var(--line);background:var(--paper);color:var(--muted);border-radius:6px 6px 0 0;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.ong.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ong.on .badge{background:var(--accent-ink);color:var(--accent)}
+.ong-add{border-style:dashed;color:var(--accent)}
+.ong-del{margin-left:auto;border-color:var(--err);color:var(--err);border-radius:6px}
+.mv-ong{width:auto;max-width:220px;padding:3px 6px;font-size:.85rem;margin-left:auto}
+.ret-art{font-weight:700;color:var(--err)}
+.retires{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:.9rem;margin-top:4px;padding:4px 8px;border:1px dashed var(--line);border-radius:4px}
+.agg-pan td{background:var(--soft)}
+.agg-box{display:flex;flex-direction:column;gap:6px;padding:4px 2px}
+.agg-l{display:grid;grid-template-columns:1fr 90px auto;gap:8px;align-items:center}
+.agg-l input{padding:3px 6px}
+li.raye,tr.raye td{color:var(--muted)}
+li.raye{list-style:none;margin-left:-1em}
+li.raye::before{content:"✕ ";color:var(--err);font-size:.8rem}
 
-  <!-- 3. Commandes de la permanence -->
-  <div class="card">
-    <h2>Commandes de la permanence <span class="hint" id="ongletNom"></span> <span class="badge" id="nbOrders">0</span></h2>
-    <div id="orders"><p class="empty">Aucune commande enregistrée pour l'instant.</p></div>
-  </div>
+/* ---------- Audit des prix ---------- */
+.releve{display:flex;flex-direction:column}
+.rl{display:grid;grid-template-columns:minmax(140px,1.4fr) 90px minmax(120px,1fr) minmax(90px,.8fr);gap:8px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line)}
+.rl input{padding:4px 6px;text-align:right}
+.rl input.envoi{opacity:.5}
+.rl input.ok{outline:2px solid var(--ok)}
+.rl.vieux input{border-color:var(--warn);background:var(--warn-bg)}
+.rl-moy{font-size:.9rem}
+.rl-date{text-align:right}
+.aud-vieux{color:var(--warn);font-weight:600}
+.past{font-size:.75rem}
+.past.bas{color:var(--ok)} .past.haut{color:var(--err)}
+@media (max-width:620px){.rl{grid-template-columns:1fr 90px}.rl-moy,.rl-date{grid-column:1/-1;text-align:left}}
+.aud-villes{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 14px;margin-bottom:12px}
+.av{display:grid;grid-template-columns:90px 1fr 46px;gap:6px;align-items:center;font-size:.88rem}
+.av-b{height:8px;background:var(--soft);border-radius:0 4px 4px 0;overflow:hidden}
+.av-b span{display:block;height:100%;background:var(--accent)}
+table.nat tr.nat-l{cursor:pointer}
+table.nat tr.nat-l:hover td{background:var(--soft)}
+.nat-villes{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:.88rem;padding:4px 0}
+.nat-villes .manque{color:var(--muted)}
+.nat-villes .vieux b{color:var(--warn)}
+.gen-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:12px}
+.gen-c{margin:0;display:grid;grid-template-columns:90px 1fr;gap:10px;align-items:start;border:1px solid var(--line);border-radius:6px;padding:8px;background:var(--field)}
+.gen-c img{width:90px;border-radius:3px}
+.gen-c ul{margin:4px 0;padding-left:18px;font-size:.88rem}
+table.gere input,table.gere select{padding:3px 6px}
+.gere-act{white-space:nowrap}
+.frp-carte.attente{border-color:var(--warn);background:var(--warn-bg)}
+.frp-att{color:var(--warn)}
+/* commerces */
+.com{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-bottom:12px;background:var(--field)}
+.com-tete{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.com-tete b{font-family:Cinzel,serif;font-size:1rem}
+.com-act{margin-left:auto;display:flex;gap:6px;align-items:center}
+.com-cat{font-family:Cinzel,serif;font-size:.72rem;color:var(--accent);margin:8px 0 2px;letter-spacing:.03em}
+.com-add{display:grid;grid-template-columns:1.4fr 1fr 90px auto;gap:6px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.com-add input,.com-add select{padding:4px 6px}
+@media (max-width:620px){.com-add{grid-template-columns:1fr 1fr}}
+.rl b.r{text-align:right;padding-right:8px}
+/* commerces v2 */
+.cl{display:grid;grid-template-columns:minmax(150px,1.6fr) 90px auto minmax(90px,.9fr) minmax(80px,.8fr) auto;gap:8px;align-items:center;padding:4px 0;border-bottom:1px dashed var(--line)}
+.cl input{padding:4px 6px}
+.cl .cl-prix{text-align:right}
+.cl.vieux .cl-prix{border-color:var(--warn);background:var(--warn-bg)}
+.cl input.envoi{opacity:.5} .cl input.ok{outline:2px solid var(--ok)}
+@media (max-width:700px){.cl{grid-template-columns:1fr 90px auto}.cl .rl-moy,.cl .rl-date{grid-column:1/-1}}
+.com-add{grid-template-columns:1.6fr 1fr 90px auto}
+.com-add .combo{position:relative}
+.combo-nouveau{color:var(--accent);font-weight:600}
+.ong-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin:-4px 0 12px;padding:10px;border:1px dashed var(--accent);border-radius:6px;background:var(--paper)}
+@media (max-width:620px){.ong-form{grid-template-columns:1fr}}
+.ctg-zones{white-space:nowrap}
+.ctg-zones .liv{display:inline-flex;margin-right:6px}
 
-  <!-- 4. Récap -->
-  <div class="card">
-    <h2>À commander à l'administration de la Compagnie pour cette permanence</h2>
-    <div id="recap"><p class="empty">Le récapitulatif apparaîtra ici.</p></div>
-    <div class="row" style="margin-top:14px">
-      <button type="button" class="btn primary" id="send">Commander aux administrateurs impériaux</button>
-      <span class="hint" id="secHint" hidden>Tu prépares la permanence : ton intendant la vérifie puis la commande aux administrateurs impériaux.</span>
-      <button type="button" class="btn" id="copy">Copier le récap</button>
-      <button type="button" class="btn" id="reset" style="margin-left:auto">Vider la permanence</button>
-    </div>
-    <div class="msg" id="sendMsg"></div>
-  </div>
-  </div>
-
-  <!-- Commandes en cours / Historique (même vue, filtrée sur « tout livré ») -->
-  <div id="viewHist" hidden>
-    <p class="hint" id="histIntro" style="margin-top:0"></p>
-    <div class="filters filters4">
-      <div id="fIntWrap"><label for="fInt">Intendant</label><select id="fInt"><option value="">Tous</option></select></div>
-      <div id="fLieuWrap"><label for="fLieu">Châtellerie</label><select id="fLieu"><option value="">Toutes</option></select></div>
-      <div><label for="fClient">Client</label><input id="fClient" placeholder="Rechercher un client"></div>
-      <div><label for="fItem">Article</label><input id="fItem" placeholder="Rechercher un article"></div>
-    </div>
-    <div class="msg" id="histMsg" style="margin:0 0 12px"></div>
-    <div id="hist"></div>
-  </div>
-
-  <!-- Stock : livré mais pas encore payé -->
-  <div id="viewStock" hidden>
-    <p class="hint" style="margin-top:0">Articles livrés par l'administration et pas encore remis au client (« Payé » non coché).</p>
-    <div class="filters filters4">
-      <div id="sIntWrap"><label for="sInt">Intendant</label><select id="sInt"><option value="">Tous</option></select></div>
-      <div><label for="sLieu">Châtellerie</label><select id="sLieu"><option value="">Toutes</option></select></div>
-      <div><label for="sClient">Client</label><input id="sClient" placeholder="Rechercher un client"></div>
-      <div><label for="sItem">Article</label><input id="sItem" placeholder="Rechercher un article"></div>
-    </div>
-    <div class="msg" id="stockMsg" style="margin:0 0 12px"></div>
-    <div class="card"><h2>En stock <span class="badge" id="stockNb">0</span></h2><div id="stockTotal"></div></div>
-    <div class="card"><h2>Détail par châtellerie et client</h2><div id="stockDetail"></div></div>
-  </div>
-
-  <!-- Frappe de septims : une par châtellerie et par semaine -->
-  <div id="viewFrp" hidden>
-    <div class="card">
-      <h2>Frappe de septims <span class="hint" id="frpSemLib"></span></h2>
-      <p class="hint" style="margin-top:0">Une frappe par châtellerie et par semaine (du lundi au dimanche), <b>20 000 septims au maximum</b>.
-      Il faut <b>10 lingots d'or et 5 lingots d'argent pour 500 septims</b> (20 000 septims = 400 or + 200 argent).<br>
-      Dépose les lingots dans le <b>tonneau d'exportation de l'entrepôt</b> puis clique « Déclarer la frappe » : la zone 1 est prévenue sur Discord et confirme « Frappe effectuée » une fois la monnaie frappée. La frappe n'entre pas dans la compta.</p>
-      <div class="row" id="frpSemWrap" style="display:none;margin-bottom:10px"><div class="frp-sem"><label for="frpSem">Semaine <span class="hint">(admin)</span></label><div class="row"><button type="button" class="btn small" id="frpPrec" title="Semaine précédente">◀</button><select id="frpSem"></select><button type="button" class="btn small" id="frpSuiv" title="Semaine suivante">▶</button></div></div></div>
-      <div class="msg" id="frpMsg"></div>
-      <div id="frpListe"></div>
-    </div>
-    <div class="card">
-      <h2>Frappes déclarées <span class="badge" id="frpNb">0</span></h2>
-      <div class="row" style="margin-bottom:10px"><div style="min-width:220px"><label for="frpFiltre">Châtellerie</label><select id="frpFiltre"><option value="">Toutes</option></select></div></div>
-      <div id="frpHist"></div>
-    </div>
-  </div>
-
-  <!-- Audit des prix : relevé par ville, vue nationale, contrats construits à partir des prix -->
-  <div id="viewAud" hidden>
-    <div class="card">
-      <h2>Ajouter un commerce</h2>
-      <div class="filters filters4">
-        <div><label for="ncRegion">Région</label><select id="ncRegion"></select></div>
-        <div><label for="ncLoc">Localisation</label><select id="ncLoc"></select></div>
-        <div><label for="ncNom">Nom du commerce</label><input id="ncNom" placeholder="ex. Chez Nini" autocomplete="off"></div>
-        <div><label for="ncConcept">Concept</label><input id="ncConcept" placeholder="ex. Alcool" list="audTypes" autocomplete="off"></div>
-      </div>
-      <div class="row"><button type="button" class="btn primary" id="audComAdd">Ajouter le commerce</button></div>
-      <div class="msg" id="ncMsg"></div>
-      <datalist id="audTypes"></datalist><datalist id="audDenList"></datalist>
-    </div>
-
-    <div class="card">
-      <h2>Mes commerces <span class="hint" id="audProg"></span></h2>
-      <p class="hint" style="margin-top:0">Prix d'<b>une unité</b>, enregistré dès que tu quittes la case. Tu peux changer le nom d'un article (il est remplacé dans ce commerce seulement) ou son prix. Les produits sont communs à toutes les zones : cherche-le avant d'en créer un. Un prix de plus d'un mois passe en <span class="aud-vieux">à revérifier</span>.</p>
-      <div class="filters filters4">
-        <div><label for="audVille">Région</label><select id="audVille"></select></div>
-        <div><label for="audLoc">Localisation</label><select id="audLoc"></select></div>
-        <div><label for="audCom">Commerce</label><select id="audCom"></select></div>
-        <div><label for="audType">Concept</label><select id="audType"></select></div>
-      </div>
-      <div class="row" style="margin:-4px 0 10px;gap:12px">
-        <div style="min-width:200px"><select id="audCat"></select></div>
-        <div style="flex:1;min-width:200px"><input id="audCherche" placeholder="Rechercher un produit…"></div>
-        <label class="liv"><input type="checkbox" id="audAFaire"> Seulement à revérifier</label>
-      </div>
-      <div class="msg" id="audMsg"></div>
-      <div id="audReleve"></div>
-    </div>
-
-    <div class="card" id="audNatCard" hidden>
-      <h2>Vue nationale</h2>
-      <div id="audVilles" class="aud-villes"></div>
-      <div id="audNat"></div>
-    </div>
-
-    <div class="card" id="audGereCard" hidden>
-      <h2>Denrées et catégories</h2>
-      <p class="hint" style="margin-top:0">Une denrée retirée n'est plus demandée dans les relevés (ses prix sont gardés, tu peux la remettre). Les ressources d'un nouveau contrat sont ajoutées automatiquement. Supprimer une catégorie met ses denrées dans « Autres ».</p>
-      <div class="msg" id="gereMsg"></div>
-      <h3 class="k-titre">Catégories</h3>
-      <div id="gereCats"></div>
-      <div class="row reg-add" style="margin-top:8px"><input id="gereCatNom" placeholder="Nouvelle catégorie" autocomplete="off"><button type="button" class="btn primary" id="gereCatAdd">Ajouter</button></div>
-      <h3 class="k-titre">Denrées</h3>
-      <div class="row reg-add" style="margin-bottom:8px"><input id="gereDenNom" placeholder="Nouvelle denrée (ex. Sel de mer)" autocomplete="off"><select id="gereDenCat" style="max-width:240px"></select><button type="button" class="btn primary" id="gereDenAdd">Ajouter</button></div>
-      <input id="gereCherche" placeholder="Rechercher une denrée…" style="margin-bottom:8px">
-      <div id="gereDen"></div>
-    </div>
-
-    <div class="card" id="audGenCard" hidden>
-      <h2>Construire des contrats</h2>
-      <p class="hint" style="margin-top:0">Pour une ville, le site prend les denrées où elle est <b>moins chère que la moyenne nationale</b> et construit un petit, un moyen et un gros contrat. Prix du contrat = coût des ressources au prix de la ville + la <b>marge</b> : c'est le bénéfice de la châtellerie qui le réalise. Rien n'est enregistré tant que tu n'as pas confirmé.</p>
-      <div class="filters">
-        <div><label for="genVille">Ville</label><select id="genVille"></select></div>
-        <div><label for="genMarge">Marge de la châtellerie (%)</label><input type="number" id="genMarge" min="0" step="1" value="20"></div>
-      </div>
-      <div class="row"><button type="button" class="btn primary" id="genGo">Construire</button></div>
-      <div class="msg" id="genMsg"></div>
-      <div id="genApercu" hidden>
-        <div class="gen-grille" id="genListe"></div>
-        <div class="row" style="margin-top:12px">
-          <button type="button" class="btn primary" id="genSave">Enregistrer dans les contrats</button>
-          <button type="button" class="btn" id="genRegen">Reconstruire</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Contrats d'exportation (tirage : admin ; suivi : admin + intendants) -->
-  <div id="viewCtr" hidden>
-    <div class="card" id="ctrTirage">
-      <h2>Contrats d'exportation</h2>
-      <p class="hint" style="margin-top:0">Tirage au sort pour une ville : <b>1 gros</b>, <b>2 moyens</b> et <b>3 petits</b> contrats, une compagnie différente pour chacun. Vérifie l'aperçu, puis confirme pour l'envoyer dans le salon Discord de la ville.</p>
-      <div class="row ctr-barre">
-        <div><label for="ctrLieu">Ville</label><select id="ctrLieu"></select></div>
-        <button type="button" class="btn primary" id="ctrGen">Générer les contrats</button>
-      </div>
-      <div class="msg" id="ctrMsg"></div>
-    </div>
-    <div class="card" id="ctrApercu" hidden>
-      <h2 id="ctrTitre">Aperçu</h2>
-      <div id="ctrListe" class="ctr-grille"></div>
-      <div class="row" style="margin-top:14px">
-        <button type="button" class="btn primary" id="ctrEnvoi">Confirmer et envoyer sur Discord</button>
-        <button type="button" class="btn" id="ctrRegen">Refaire le tirage</button>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Contrats envoyés</h2>
-      <p class="hint" style="margin-top:0">Ouvre une ville, coche les contrats remplis (un ou plusieurs) puis enregistre : le sceau de la ville est apposé sur l'image et le message Discord est mis à jour, sans nouvelle notification. Quand tout est coché, l'envoi est accompli et disparaît après 7 jours.</p>
-      <div class="msg" id="suiviMsg"></div>
-      <div id="ctrSuivi"></div>
-    </div>
-  </div>
-
-  <!-- Compta des coffres (admin) -->
-  <div id="viewCpt" hidden>
-    <div class="filters filters4">
-      <div><label for="kPer">Période</label><select id="kPer">
-        <option value="semaine">Cette semaine</option><option value="mois" selected>Ce mois-ci</option>
-        <option value="moisPrec">Le mois dernier</option><option value="tout">Depuis le début</option><option value="perso">Dates au choix…</option></select></div>
-      <div id="kDuWrap" hidden><label for="kDu">Du</label><input type="date" id="kDu"></div>
-      <div id="kAuWrap" hidden><label for="kAu">Au</label><input type="date" id="kAu"></div>
-      <div><label for="kZone">Zone</label><select id="kZone"><option value="">Toutes</option></select></div>
-    </div>
-    <div class="msg" id="kMsg" style="margin:0 0 12px"></div>
-
-    <div class="card">
-      <h2>Coffres des zones <button type="button" class="btn small" id="kMaj" style="margin-left:auto">Actualiser</button></h2>
-      <p class="hint" style="margin-top:0">Le <b>solde</b> est ce qu'il y a dans le coffre aujourd'hui (tout l'historique). Entrées et sorties : sur la période choisie.<br>
-      Entrées = commandes <b>payées</b> (septims + pièces fournies par le client). Sorties = contrats d'export réalisés (le coffre paie le prix et reçoit les ressources), frappe de septims (le coffre paie et reçoit les lingots) et loyer du pied-à-terre chaque semaine.</p>
-      <div id="kCoffres" class="k-coffres"></div>
-    </div>
-
-    <div class="card">
-      <h2>Statistiques <span class="hint" id="kStatPer"></span></h2>
-      <div id="kStats"></div>
-    </div>
-
-    <div class="card">
-      <h2>Entrées / sorties <span class="badge" id="kNb">0</span></h2>
-      <div class="row" style="margin-bottom:10px">
-        <div style="min-width:200px"><label for="kType">Type</label><select id="kType"><option value="">Tous</option>
-          <option value="commande">Commandes payées</option><option value="contrat">Contrats d'export</option><option value="loyer">Loyers</option><option value="frappe">Frappe de septims</option><option value="manuel">Manuels</option></select></div>
-        <label class="liv" style="align-self:flex-end;margin-bottom:8px"><input type="checkbox" id="kRetires"> Voir les mouvements retirés <span class="hint" id="kRetNb"></span></label>
-      </div>
-      <p class="hint" style="margin-top:0">✎ change le montant d'un loyer pour cette semaine seulement. × : un mouvement manuel est supprimé, une frappe est annulée ; une commande, un contrat ou un loyer est <b>retiré de la compta</b> (rien d'autre ne change, rétablissable).</p>
-      <div id="kJournal"></div>
-      <h3 class="k-titre">Ajouter un mouvement manuel</h3>
-      <p class="hint" style="margin-top:0">Correction, retrait, revente d'objets… Indique un montant et/ou des objets avec leur quantité (le sens s'applique à tout).</p>
-      <div class="k-form">
-        <div><label for="mZone">Zone</label><select id="mZone"></select></div>
-        <div><label for="mSens">Sens</label><select id="mSens"><option value="1">Entrée</option><option value="-1">Sortie</option></select></div>
-        <div><label for="mMontant">Septims</label><input type="number" id="mMontant" min="0" step="1" placeholder="0"></div>
-        <div class="k-lib"><label for="mLib">Libellé</label><input id="mLib" placeholder="ex. Achat de mobilier" autocomplete="off"></div>
-      </div>
-      <label style="margin-top:10px">Objets <span class="hint">(facultatif)</span></label>
-      <div id="mObjets"></div><datalist id="kResList"></datalist>
-      <button type="button" class="btn small" id="mObjAdd">+ Objet</button>
-      <div class="row" style="margin-top:10px"><button type="button" class="btn primary" id="mAdd">Ajouter</button></div>
-      <div class="msg" id="mMsg"></div>
-    </div>
-
-    <div class="card">
-      <h2>Loyers des pieds-à-terre</h2>
-      <p class="hint" style="margin-top:0">Montant prélevé <b>une fois par semaine</b> (lundi → dimanche) sur le coffre de la zone, <b>dès la semaine où il est fixé</b>. Un changement compte pour la semaine en cours ; les semaines passées gardent leur montant. 0 = pas de loyer.</p>
-      <div class="msg" id="lMsg"></div>
-      <div id="kLoyers"></div>
-    </div>
-  </div>
-
-  <!-- Catalogue -->
-  <div id="viewCat" hidden>
-    <div class="card">
-      <h2>Catalogues</h2>
-      <p class="hint" style="margin-top:0">Le catalogue <b>Principal</b> est celui de tout le monde. Un autre catalogue (ex. « Forge Divine ») a ses propres articles et prix, et n'est proposé qu'aux zones cochées (aucune case = toutes les zones). Dans la prise de commande, on crée un onglet lié au catalogue : la recherche n'y montre que ses articles.</p>
-      <div class="msg" id="ctgMsg"></div>
-      <div id="ctgListe"></div>
-      <div class="row reg-add" style="margin-top:8px"><input id="ctgNom" placeholder="Nouveau catalogue (ex. Forge Divine)" autocomplete="off"><button type="button" class="btn primary" id="ctgAdd">Créer</button></div>
-    </div>
-
-    <div class="card" id="catFormCard">
-      <h2 id="catFormTitle">Ajouter un article</h2>
-      <div style="max-width:340px;margin-bottom:12px"><label for="cCatalogue">Catalogue</label><select id="cCatalogue"></select></div>
-      <div class="grid">
-        <div><label for="cCat">Catégorie</label><input id="cCat" list="catList" autocomplete="off" placeholder="ex. Alcool"><datalist id="catList"></datalist></div>
-        <div><label for="cNom">Nom de l'article</label><input id="cNom" autocomplete="off"></div>
-        <div><label for="cPrix">Prix (septims)</label><input id="cPrix" type="number" min="0" step="1"></div>
-      </div>
-      <div class="grid" style="margin-top:12px">
-        <div><label for="cId">ID de l'article <span class="hint"></span></label><input id="cId" class="mono" autocomplete="off" placeholder="ex. 0001396B"></div>
-        <div><label for="cFourni">À fournir par le client <span class="hint">(facultatif)</span></label><input id="cFourni" placeholder="ex. Casque d'acier"></div>
-        <div><label for="cNote">Avertissement <span class="hint">(facultatif)</span></label><input id="cNote" placeholder="ex. Max 4 par semaine"></div>
-      </div>
-      <div class="var-box" style="margin-top:12px">
-        <label>Variantes <span class="hint">(facultatif — couleurs, modèles… L'intendant devra en choisir une. Sans variante, il ne voit rien de plus.)</span></label>
-        <div id="cVars"></div>
-        <button type="button" class="btn small" id="cVarAdd">+ Ajouter une variante</button>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button type="button" class="btn primary" id="cSave">Ajouter au catalogue</button>
-        <button type="button" class="btn" id="cCancel" style="display:none">Annuler la modification</button>
-      </div>
-      <div class="msg" id="cMsg"></div>
-    </div>
-
-    <div class="card">
-      <h2>Articles <span class="badge" id="nbArticles">0</span></h2>
-      <div class="row" style="margin-bottom:10px;gap:10px"><div style="min-width:220px"><select id="cFiltreCatalogue"></select></div>
-        <div style="flex:1;min-width:220px"><input id="cSearch" placeholder="Rechercher un article, une catégorie ou un ID…"></div></div>
-      <div class="row" style="margin-bottom:10px">
-        <label class="liv"><input type="checkbox" id="cMissing"> Seulement les articles sans ID</label>
-        <span class="hint" id="nbMissing"></span>
-      </div>
-      <p class="hint" style="margin-top:0">Les ID se modifient directement dans la colonne « ID item » : ils sont enregistrés pour tout le monde dès que tu quittes la case.</p>
-      <div class="msg" id="cIdMsg"></div>
-      <div id="catTable"></div>
-    </div>
-
-    <div class="card">
-      <h2>Sauvegarde du catalogue</h2>
-      <p class="hint" style="margin-top:0">Le catalogue est enregistré en ligne et partagé par tous les intendants. Tu peux en télécharger une copie de secours.</p>
-      <div class="row">
-        <button type="button" class="btn" id="cExport">Exporter (.json)</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Réglages -->
-  <div id="viewReg" hidden>
-    <div class="card">
-      <h2>Intendants</h2>
-      <div class="row reg-add"><input id="rInt" placeholder="Nom de l'intendant" autocomplete="off"><button type="button" class="btn primary" id="rIntAdd">Ajouter</button></div>
-      <div class="msg" id="rIntMsg"></div>
-      <div id="regInt" style="margin-top:10px"></div>
-    </div>
-    <div class="card">
-      <h2>Secrétaires</h2>
-      <div class="row reg-add"><input id="rSec" placeholder="Nom de la secrétaire" autocomplete="off"><button type="button" class="btn primary" id="rSecAdd">Ajouter</button></div>
-      <div class="msg" id="rSecMsg"></div>
-      <div id="regSec" style="margin-top:10px"></div>
-    </div>
-    <div class="card">
-      <h2>Zones</h2>
-      <p class="hint" style="margin-top:0">Chaque zone a son coffre, son intendant et sa secrétaire. À sa connexion, quelqu'un qui a les rôles Discord Intendant (ou Secrétaire) + Zone N est placé <b>automatiquement</b> dans sa zone si elle est vide ; tu peux toujours <b>changer avec la liste</b>. Seuls l'intendant et la secrétaire choisis ici ont accès à la zone.</p>
-      <div class="msg" id="zonesMsg"></div>
-      <div id="regZones"></div>
-    </div>
-    <div class="card">
-      <h2>Compagnies d'exportation <span class="hint" id="cieNb"></span></h2>
-      <p class="hint" style="margin-top:0">Les compagnies cochées « Au tirage » peuvent sortir dans les contrats d'exportation (il en faut au moins 6).</p>
-      <div class="msg" id="cieMsg"></div>
-      <div id="regCie"></div>
-      <div class="cie-form" id="cieForm">
-        <h3 id="cieTitre">Ajouter une compagnie</h3>
-        <div><label for="cieNom">Nom</label><input id="cieNom" placeholder="ex. Comptoir de Gilane" autocomplete="off"></div>
-        <div><label for="ciePlanche" id="ciePlancheAide">Planche complète (les contrats petit, moyen et gros côte à côte, de gauche à droite)</label>
-          <input type="file" id="ciePlanche" accept="image/png,image/webp"></div>
-        <div id="cieApercu" class="cie-apercu"></div>
-        <div class="cie-tailles">
-          <div><b>Petit</b><input type="number" id="ciePrix-petit" min="1" placeholder="Prix en septims"></div>
-          <div><b>Moyen</b><input type="number" id="ciePrix-moyen" min="1" placeholder="Prix en septims"></div>
-          <div><b>Gros</b><input type="number" id="ciePrix-gros" min="1" placeholder="Prix en septims"></div>
-        </div>
-        <div class="row"><button type="button" class="btn primary" id="cieSave">Enregistrer la compagnie</button><button type="button" class="btn" id="cieAnnul" hidden>Annuler</button></div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>Comptes connectés</h2>
-      <p class="hint" style="margin-top:0">Les droits viennent des rôles Discord, vérifiés à chaque connexion (valables 7 jours). Pour retirer un accès, retire le rôle sur Discord.<br>
-      Chaque compte Intendant est ajouté automatiquement à la liste des intendants avec son nom Discord, et renommé s'il change de nom. Il ne te reste qu'à lui attribuer ses <b>châtelleries</b> et son <b>coffre</b>.</p>
-      <div id="regComptes"></div>
-    </div>
-  </div>
-</div>
-
-<!-- Fenêtre de confirmation -->
-<div id="modal" hidden><div class="modal-box"><p id="modalTxt"></p>
-  <div class="row" style="justify-content:flex-end"><button type="button" class="btn" id="modalNo">Annuler</button><button type="button" class="btn primary" id="modalYes">Confirmer</button></div></div></div>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="script.js?v=20261017b"></script>
-</body>
-</html>
+/* Total de la commande (à droite sur grand écran) + totaux par commande */
+.side-recap{margin-top:12px;border:1px solid var(--line);border-radius:6px;background:var(--soft);padding:12px 14px}
+.side-recap h3{margin:0 0 6px;font-family:Cinzel,serif;font-size:.95rem;color:var(--accent)}
+.sr-client{font-weight:600;margin-bottom:6px}
+.sr-ligne{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.sr-sous{margin:8px 0 4px;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.sr-mats,.order .sr-mats{margin:0;padding:0;list-style:none}
+.sr-mats li{padding:2px 0;border-bottom:1px dotted var(--line)}
+.sr-mats li:last-child{border-bottom:0}
+.sr-lim{margin-top:10px;font-size:.8rem;color:var(--muted)}
+.sr-lim.trop{color:var(--err);font-weight:600}
+@media (min-width:1320px){
+  .side-recap{position:fixed;top:24px;left:calc(50% + 476px);width:calc(50vw - 500px);max-width:330px;max-height:calc(100vh - 48px);overflow:auto;margin:0;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+}
+.order-body{display:grid;grid-template-columns:1fr minmax(170px,230px);gap:14px;align-items:start}
+.order-body > ul{margin:6px 0 0}
+.o-tot{border:1px solid var(--line);border-radius:6px;background:var(--soft);padding:8px 10px;font-size:.9rem}
+@media (max-width:680px){.order-body{grid-template-columns:1fr}}

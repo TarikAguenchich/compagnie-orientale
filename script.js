@@ -407,6 +407,44 @@ function coutTexte(a, q) {
   return parts.join(" + ") + (a.note ? " — ⚠ " + a.note : "");
 }
 
+// Matériaux à fournir : « Robe + 2 Lins » × q -> [{ nom, qte }] (« 50 septims » compte en septims)
+const LIMITE_LIGNES = 50;
+function partsFourni(f, q) {
+  return String(f || "").split("+").map(s => s.trim()).filter(Boolean).map(s => {
+    const m = s.match(/^(\d+)\s*[x×]?\s+(.+)$/);
+    return m ? { nom: m[2].trim(), qte: Number(m[1]) * q } : { nom: s, qte: q };
+  });
+}
+// lignes : [{ prix, fourni, qte }] -> { sept, mats: [{ nom, qte }] }
+function totaux(lignes) {
+  let sept = 0; const m = new Map();
+  lignes.forEach(x => {
+    sept += (Number(x.prix) || 0) * x.qte;
+    partsFourni(x.fourni, x.qte).forEach(p => {
+      if (/^septim/.test(sansAccent(p.nom))) { sept += p.qte; return; }
+      if (!p.qte) return;
+      const k = cleObjet(p.nom), e = m.get(k) || { nom: p.nom, qte: 0 }; e.qte += p.qte; m.set(k, e);
+    });
+  });
+  return { sept, mats: [...m.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr")) };
+}
+const totauxCommande = o => totaux(o.items.map(x => { const a = infos(x); return { prix: a.prix, fourni: a.fourni, qte: x.qte }; }));
+const lignesOnglet = (sauf, plus) => agreger(actives(ordresOnglet().filter(o => o.id !== sauf)).concat(plus || [])).length;
+
+function renderSideRecap() {
+  const ls = lignesBrutes().filter(x => ITEM[x.k] && x.qte > 0).map(x => ({ prix: ITEM[x.k].prix, fourni: ITEM[x.k].fourni, qte: x.qte }));
+  const box = $("sideRecap");
+  if (!ls.length) { box.hidden = true; return; }
+  const t = totaux(ls), client = $("client").value.trim();
+  const nl = lignesOnglet(editId, lignesForm().filter(x => ITEM[x.k]).map(x => ({ items: [x] })));
+  box.hidden = false;
+  box.innerHTML = `<h3>Total de la commande</h3>
+    ${client ? `<div class="sr-client">${esc(client)}</div>` : ""}
+    <div class="sr-ligne"><span>Septims à payer</span><b>${fmt(t.sept)}</b></div>
+    ${t.mats.length ? `<div class="sr-sous">À fournir par le client</div><ul class="sr-mats">${t.mats.map(x => `<li><b>${x.qte}</b> × ${esc(x.nom)}</li>`).join("")}</ul>` : `<div class="hint">Aucun matériau à fournir.</div>`}
+    <div class="sr-lim${nl > LIMITE_LIGNES ? " trop" : ""}">Onglet : ${nl} / ${LIMITE_LIGNES} lignes${nl > LIMITE_LIGNES ? " — limite dépassée, crée un nouvel onglet" : ""}</div>`;
+}
+
 function saveDraft() {
   if (restoring) return;
   state.draft = { editId, client: $("client").value, type: $("clientType").value, notes: $("notes").value, lines: lignesBrutes() };
@@ -421,9 +459,10 @@ function calcForm() {
     if (a) tot += a.prix * q;
   });
   $("orderTotal").textContent = tot ? "Total : " + fmt(tot) : "";
+  renderSideRecap();
   saveDraft();
 }
-$("client").oninput = saveDraft;
+$("client").oninput = () => { renderSideRecap(); saveDraft(); };
 $("clientType").onchange = saveDraft;
 $("notes").oninput = saveDraft;
 
@@ -461,6 +500,8 @@ $("saveOrder").onclick = async () => {
   const fig = items.map(x => { const a = ITEM[x.k]; return Object.assign(x, { nom: a.nom, prix: a.prix, fourni: a.fourni || "", cat: a.cat }); });
   const o = { id: editId || Date.now().toString(36) + Math.random().toString(36).slice(2, 5), client, type: $("clientType").value, notes: $("notes").value.trim(), items: fig };
   const edit = !!editId, ong = edit ? ongletDe(state.orders.find(x => x.id === editId) || {}) : state.onglet;
+  const nl = agreger(actives(state.orders.filter(x => ongletDe(x) === ong && x.id !== o.id)).concat([o])).length;
+  if (nl > LIMITE_LIGNES) return flash($("formMsg"), `Limite atteinte : l'onglet passerait à ${nl} lignes d'articles (${LIMITE_LIGNES} max par commande, sinon la notif Discord s'affiche mal). Crée un nouvel onglet (« + Onglet ») pour cette commande et envoie-le à part.`, false);
   if (estZone()) {
     if (ZONE == null) return flash($("formMsg"), "Aucune zone sur ton compte.", false);
     const maj = { commande: o, maj_le: new Date().toISOString(), maj_par: PROFIL?.nom || null };
@@ -497,10 +538,10 @@ function htmlCommandes(orders, actions, permId) {
   return orders.map((o, i) => `<div class="order${permId ? (o.annuleLe ? " annulee" : o.payeLe ? " payee" : o.livreLe ? " livree" : "") : ""}">
     <div class="order-head"><b>${i + 1}. ${esc(o.client)}</b><span class="hint">${esc(o.type)}</span>
       <span class="total" style="font-size:.9rem">${fmt(totalOrder(o))}</span></div>
-    <ul>${o.items.map((x, j) => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}${
+    <div class="order-body"><ul>${o.items.map((x, j) => { const a = infos(x); return `<li>${x.qte} × ${esc(lib(x))}${a.fourni ? ` <span class="hint">— fournit : ${esc(a.fourni)}${x.qte > 1 ? " (×" + x.qte + ")" : ""}</span>` : ""}${
       permId && !o.payeLe && !o.annuleLe ? ` <button type="button" class="k-ico ret-art" title="Retirer cet article (pas vendu)" data-ret-art="${esc(permId)}|${esc(o.id)}|${j}">−</button>` : ""}</li>`; }).join("")}${
       permId ? (o.retires || []).map((r, j) => `<li class="raye"><s>${r.qte} × ${esc(lib(r))}</s> <span class="hint">— retiré (pas vendu) par ${esc(r.retirePar || "?")} le ${new Date(r.retireLe).toLocaleDateString("fr-FR")}</span>${
-        !o.payeLe && !o.annuleLe ? ` <button type="button" class="btn small" data-retab="${esc(permId)}|${esc(o.id)}|${j}">Rétablir</button>` : ""}</li>`).join("") : ""}</ul>
+        !o.payeLe && !o.annuleLe ? ` <button type="button" class="btn small" data-retab="${esc(permId)}|${esc(o.id)}|${j}">Rétablir</button>` : ""}</li>`).join("") : ""}</ul>${htmlTotalCommande(o)}</div>
     ${o.notes ? `<div class="meta">📝 ${esc(o.notes)}</div>` : ""}
     ${permId ? (o.annuleLe
       ? `<div class="row etats" style="margin-top:8px"><span class="tag err">Annulée</span><span class="hint">le ${new Date(o.annuleLe).toLocaleString("fr-FR")}${o.annulePar ? " par " + esc(o.annulePar) : ""}</span>
@@ -512,6 +553,11 @@ function htmlCommandes(orders, actions, permId) {
     ${actions ? `<div class="row" style="margin-top:8px"><button class="btn small" data-e="${o.id}">Modifier</button><button class="btn small" data-d="${o.id}">Supprimer</button>${listeOnglets().length > 1
       ? `<select class="mv-ong" data-mv="${o.id}"><option value="">Déplacer vers…</option>${listeOnglets().filter(n => n !== ongletDe(o)).map(n => `<option>${esc(n)}</option>`).join("")}</select>` : ""}</div>` : ""}
   </div>`).join("");
+}
+function htmlTotalCommande(o) {
+  const t = totauxCommande(o);
+  return `<div class="o-tot"><div class="sr-ligne"><span>Septims</span><b>${fmt(t.sept)}</b></div>${t.mats.length
+    ? `<div class="sr-sous">À fournir</div><ul class="sr-mats">${t.mats.map(x => `<li><b>${x.qte}</b> × ${esc(x.nom)}</li>`).join("")}</ul>` : ""}</div>`;
 }
 function htmlRecap(orders, coffre, p) {
   orders = actives(orders);
@@ -562,7 +608,10 @@ function render() {
     $("formCard").scrollIntoView({ behavior: "smooth" });
   });
   box.querySelectorAll("[data-mv]").forEach(sel => sel.onchange = () => deplacerCommande(sel.dataset.mv, sel.value));
-  $("recap").innerHTML = liste.length ? htmlRecap(liste, state.coffre || "—") : '<p class="empty">Le récapitulatif apparaîtra ici.</p>';
+  const nLig = agreger(actives(liste)).length;
+  $("recap").innerHTML = liste.length ? (nLig > LIMITE_LIGNES ? `<p class="msg err" style="display:block">Limite atteinte : ${nLig} lignes d'articles (${LIMITE_LIGNES} max par commande). Déplace des commandes dans un autre onglet avant d'envoyer.</p>` : "")
+    + htmlRecap(liste, state.coffre || "—") + `<p class="hint" style="margin-top:6px">${nLig} / ${LIMITE_LIGNES} lignes</p>` : '<p class="empty">Le récapitulatif apparaîtra ici.</p>';
+  renderSideRecap();
 }
 function renderOnglets() {
   const l = listeOnglets(), nb = n => state.orders.filter(o => ongletDe(o) === n).length;
@@ -643,6 +692,8 @@ const sansIds = orders => orders.map(o => Object.assign({}, o, { items: o.items.
 $("send").onclick = async () => {
   const nOng = ordresOnglet().length, dansOng = listeOnglets().length > 1 ? ` de l'onglet « ${state.onglet} »` : "";
   if (!nOng) return flash($("sendMsg"), "Aucune commande dans cet onglet.", false);
+  const nLig = agreger(actives(ordresOnglet())).length;
+  if (nLig > LIMITE_LIGNES) return flash($("sendMsg"), `Limite atteinte : ${nLig} lignes d'articles (${LIMITE_LIGNES} max par commande). Déplace des commandes dans un autre onglet (« Déplacer vers… ») et envoie-les à part.`, false);
   if (!state.date) return flash($("sendMsg"), "Renseigne la date.", false);
   if (estSecretaire()) return;
   if (estZone()) {
