@@ -393,3 +393,5 @@ table.gere input,table.gere select{padding:3px 6px}
 .order-body > ul{margin:6px 0 0}
 .o-tot{border:1px solid var(--line);border-radius:6px;background:var(--soft);padding:8px 10px;font-size:.9rem}
 @media (max-width:680px){.order-body{grid-template-columns:1fr}}
+.suivi-total{font-family:Cinzel,serif;font-weight:700;color:var(--accent);margin-left:auto}
+.suivi-total .hint{font-family:inherit;font-weight:400}

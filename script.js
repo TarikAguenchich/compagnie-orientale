@@ -1397,12 +1397,16 @@ function renderSuivi() {
     const envois = ENVOIS.filter(e => e.lieu === v).sort((a, b) => !!a.accompli_le - !!b.accompli_le);   // accomplis en dernier
     const enCours = envois.filter(e => !e.accompli_le).length, finis = envois.length - enCours;
     const restants = envois.reduce((s, e) => s + contratsDe(e).length - Object.keys(e.realises || {}).length, 0);
+    const enCoursE = envois.filter(e => !e.accompli_le);
+    const totalV = enCoursE.reduce((s, e) => s + contratsDe(e).reduce((t, c) => t + (Number(c.prix) || 0), 0), 0);
+    const resteV = enCoursE.reduce((s, e) => s + contratsDe(e).reduce((t, c, i) => t + ((e.realises || {})[String(i + 1)] ? 0 : Number(c.prix) || 0), 0), 0);
     return `<details class="ville-suivi" data-ville="${esc(v)}" ${VILLES_OUVERTES.has(v) ? "open" : ""}>
-      <summary><b>${esc(v)}</b><span class="hint">${enCours} envoi${enCours > 1 ? "s" : ""} en cours · ${restants} contrat${restants > 1 ? "s" : ""} à remplir${finis ? ` · ${finis} accompli${finis > 1 ? "s" : ""}` : ""}</span></summary>
+      <summary><b>${esc(v)}</b><span class="hint">${enCours} envoi${enCours > 1 ? "s" : ""} en cours · ${restants} contrat${restants > 1 ? "s" : ""} à remplir${finis ? ` · ${finis} accompli${finis > 1 ? "s" : ""}` : ""}</span>${totalV ? `<span class="suivi-total">Total : ${fmt(totalV)}${resteV !== totalV ? ` <span class="hint">· reste ${fmt(resteV)}</span>` : ""}</span>` : ""}</summary>
       ${envois.map(e => {
         const cs = contratsDe(e), rea = e.realises || {}, nb = Object.keys(rea).length;
         return `<div class="suivi${e.accompli_le ? " accompli" : ""}" data-envoi="${e.id}">
           <div class="suivi-tete"><span>Envoyé le ${dateCourte(e.envoye_le)}</span>
+            <span class="suivi-total">${fmt(cs.reduce((t, c) => t + (Number(c.prix) || 0), 0))}</span>
             <span class="tag ${e.accompli_le ? "ok" : ""}">${e.accompli_le ? "✅ Accompli" : `${nb} / ${cs.length} réalisé${nb > 1 ? "s" : ""}`}</span>
             ${e.accompli_le ? `<span class="hint">disparaît le ${new Date(new Date(e.accompli_le).getTime() + 7 * JOUR).toLocaleDateString("fr-FR")}</span>` : ""}</div>
           <div class="ctr-grille">${cs.map((c, i) => {
