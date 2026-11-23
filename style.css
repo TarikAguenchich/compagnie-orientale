@@ -374,3 +374,22 @@ table.gere input,table.gere select{padding:3px 6px}
 @media (max-width:620px){.ong-form{grid-template-columns:1fr}}
 .ctg-zones{white-space:nowrap}
 .ctg-zones .liv{display:inline-flex;margin-right:6px}
+
+/* Total de la commande (à droite sur grand écran) + totaux par commande */
+.side-recap{margin-top:12px;border:1px solid var(--line);border-radius:6px;background:var(--soft);padding:12px 14px}
+.side-recap h3{margin:0 0 6px;font-family:Cinzel,serif;font-size:.95rem;color:var(--accent)}
+.sr-client{font-weight:600;margin-bottom:6px}
+.sr-ligne{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.sr-sous{margin:8px 0 4px;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.sr-mats,.order .sr-mats{margin:0;padding:0;list-style:none}
+.sr-mats li{padding:2px 0;border-bottom:1px dotted var(--line)}
+.sr-mats li:last-child{border-bottom:0}
+.sr-lim{margin-top:10px;font-size:.8rem;color:var(--muted)}
+.sr-lim.trop{color:var(--err);font-weight:600}
+@media (min-width:1320px){
+  .side-recap{position:fixed;top:24px;left:calc(50% + 476px);width:calc(50vw - 500px);max-width:330px;max-height:calc(100vh - 48px);overflow:auto;margin:0;z-index:5;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+}
+.order-body{display:grid;grid-template-columns:1fr minmax(170px,230px);gap:14px;align-items:start}
+.order-body > ul{margin:6px 0 0}
+.o-tot{border:1px solid var(--line);border-radius:6px;background:var(--soft);padding:8px 10px;font-size:.9rem}
+@media (max-width:680px){.order-body{grid-template-columns:1fr}}
